@@ -1,3 +1,14 @@
+---
+title: CodeReviewEnv
+emoji: 🔍
+colorFrom: blue
+colorTo: purple
+sdk: docker
+app_port: 7860
+tags:
+  - openenv
+---
+
 # CodeReviewEnv
 
 > An OpenEnv-compliant environment for training and evaluating AI agents on **real-world code review tasks**.
