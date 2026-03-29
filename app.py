@@ -51,8 +51,11 @@ env = CodeReviewEnv()
 
 # ── Request / Response schemas ────────────────────────────────────────────
 
+# FIX 1: task_id is fully optional — works with empty POST body too
 class ResetRequest(BaseModel):
-    task_id: Optional[str] = "easy"
+    task_id: Optional[str] = "task_1"
+
+    model_config = {"extra": "allow"}
 
 
 class StepResponse(BaseModel):
@@ -88,11 +91,13 @@ def root():
     }
 
 
+# FIX 2: Accept completely empty body by making request optional
 @app.post("/reset", response_model=Observation, tags=["OpenEnv"])
-def reset(request: ResetRequest):
+def reset(request: Optional[ResetRequest] = None):
     """Reset the environment to a clean state. Returns the initial observation."""
     try:
-        obs = env.reset(task_id=request.task_id)
+        task_id = request.task_id if request else "task_1"
+        obs = env.reset(task_id=task_id)
         return obs
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -180,7 +185,7 @@ def tasks():
 @app.post("/grader", response_model=GraderOutput, tags=["OpenEnv"])
 def grader(grader_input: GraderInput):
     """
-    Score a completed episode. Returns deterministic score between 0.0–1.0.
+    Score a completed episode. Returns deterministic score between 0.0-1.0.
     Accepts episode history produced by /step calls.
     """
     try:
@@ -190,12 +195,13 @@ def grader(grader_input: GraderInput):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+# FIX 3: calls inference.py (renamed from baseline.py)
 @app.post("/baseline", response_model=BaselineResponse, tags=["OpenEnv"])
 def baseline():
     """
     Trigger the baseline inference script.
-    Runs a GPT model against all 3 tasks and returns reproducible scores.
-    Note: requires OPENAI_API_KEY environment variable.
+    Runs the agent against all 3 tasks and returns reproducible scores.
+    Note: requires GEMINI_API_KEY environment variable.
     """
     try:
         import subprocess
@@ -203,7 +209,7 @@ def baseline():
         import sys
 
         result = subprocess.run(
-            [sys.executable, "baseline.py", "--output-json"],
+            [sys.executable, "inference.py", "--output-json"],
             capture_output=True,
             text=True,
             timeout=300,
@@ -218,7 +224,7 @@ def baseline():
         scores_data = json.loads(result.stdout)
         return BaselineResponse(
             scores=scores_data["scores"],
-            model_used=scores_data.get("model_used", "gpt-4o-mini"),
+            model_used=scores_data.get("model_used", "gemini-2.0-flash"),
             note=scores_data.get("note", ""),
         )
     except subprocess.TimeoutExpired:
