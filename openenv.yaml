@@ -1,0 +1,18 @@
+name: CodeReviewEnv
+version: 1.0.0
+description: AI agent simulates a senior code reviewer identifying bugs, security vulnerabilities, and performance issues in code diffs.
+author: lucifer0077
+space_url: https://huggingface.co/spaces/lucifer0077/code-review-env
+api_url: https://lucifer0077-code-review-env.hf.space
+tags:
+  - code-review
+  - security
+  - bugs
+  - openenv
+endpoints:
+  reset: POST /reset
+  step: POST /step
+  state: GET /state
+  tasks: GET /tasks
+  grader: POST /grader
+  baseline: POST /baseline
