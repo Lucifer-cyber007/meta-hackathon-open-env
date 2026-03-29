@@ -1,0 +1,190 @@
+"""
+Baseline inference script for CodeReviewEnv.
+
+Uses Google Gemini API (FREE tier) via the OpenAI-compatible client.
+Gemini free tier: 1500 requests/day on gemini-1.5-flash — no credit card needed.
+
+Get your free API key at: https://aistudio.google.com/app/apikey
+
+Usage:
+    python baseline.py
+    python baseline.py --output-json      # used by /baseline endpoint
+    python baseline.py --task easy        # single task only
+"""
+
+import os
+import sys
+import json
+import argparse
+from typing import Dict, Any
+
+from openai import OpenAI
+from environment import CodeReviewEnv
+from graders import grade_episode
+from models import Action, CodeComment, GraderInput
+
+
+# ════════════════════════════════════════════════════════════
+# ▶▶  CHANGE 1: Put your free Gemini API key here
+#     OR set environment variable: export GEMINI_API_KEY=   
+#     Get free key at: https://aistudio.google.com/app/apikey
+# ════════════════════════════════════════════════════════════
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AIzaSyD4ZdqU7eAlnUXD_TNpTa0UiEvTSqghhCU")
+
+GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
+DEFAULT_MODEL = "gemini-3.1-flash-lite-preview"
+
+
+SYSTEM_PROMPT = """You are an expert code reviewer. You will be given a code diff from a pull request.
+Your job is to identify ALL bugs, security vulnerabilities, performance issues, and logic errors.
+
+For each issue you find, specify:
+- line_number: integer line number in the diff
+- issue_type: one of "bug", "security", "performance", "style", "logic"
+- severity: one of "critical", "major", "minor"
+- description: clear explanation
+- suggested_fix: optional fix
+
+Respond with ONLY valid JSON, no markdown, no extra text:
+{
+  "comments": [
+    {
+      "line_number": <int>,
+      "issue_type": "<type>",
+      "severity": "<severity>",
+      "description": "<description>",
+      "suggested_fix": "<optional>"
+    }
+  ],
+  "verdict": "<approve|request_changes|comment>",
+  "summary": "<brief summary>"
+}
+
+Look for: empty list crashes, SQL injection, hardcoded secrets, weak crypto (MD5),
+race conditions, silent exceptions, dict mutation during iteration, logic errors."""
+
+
+def build_user_prompt(obs: Dict[str, Any]) -> str:
+    return f"""PR Title: {obs['pr_title']}
+File: {obs['file_name']}
+Task: {obs['task_description']}
+
+Code Diff:
+{obs['diff']}
+
+Return ONLY a JSON object with your findings."""
+
+
+def parse_llm_response(content: str) -> Action:
+    clean = content.strip()
+    if clean.startswith("```"):
+        lines = clean.split("\n")
+        clean = "\n".join(lines[1:])
+        if clean.strip().endswith("```"):
+            clean = clean.strip()[:-3].strip()
+
+    data = json.loads(clean)
+    comments = []
+    for c in data.get("comments", []):
+        try:
+            comments.append(CodeComment(
+                line_number=int(c.get("line_number", 1)),
+                issue_type=c.get("issue_type", "bug"),
+                severity=c.get("severity", "minor"),
+                description=str(c.get("description", "")),
+                suggested_fix=c.get("suggested_fix"),
+            ))
+        except Exception:
+            continue
+    return Action(
+        comments=comments,
+        verdict=data.get("verdict", "comment"),
+        summary=data.get("summary"),
+    )
+
+
+def run_task(client: OpenAI, task_id: str, model: str, verbose: bool = True) -> Dict[str, Any]:
+    env = CodeReviewEnv(task_id=task_id)
+    obs = env.reset(task_id=task_id)
+
+    if verbose:
+        print(f"\n{'='*60}\n  Task: {task_id.upper()} — {obs.file_name}\n{'='*60}")
+
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": build_user_prompt(obs.model_dump())},
+            ],
+            temperature=0.0,
+            max_tokens=2000,
+        )
+        action = parse_llm_response(response.choices[0].message.content)
+    except Exception as e:
+        if verbose:
+            print(f"  [ERROR] {e}")
+        action = Action(comments=[], verdict="comment", summary=f"Error: {e}")
+
+    _, reward, _, info = env.step(action)
+    episode_history = [{
+        "step": 1,
+        "action": action.model_dump(),
+        "reward": reward,
+        "reward_breakdown": info.get("reward_breakdown", {}),
+        "reward_message": info.get("reward_message", ""),
+        "issues_found_this_step": info.get("issues_found", 0),
+        "false_positives_this_step": info.get("false_positives", 0),
+    }]
+
+    result = grade_episode(GraderInput(task_id=task_id, episode_history=episode_history))
+
+    if verbose:
+        print(f"  Comments   : {len(action.comments)}")
+        print(f"  Verdict    : {action.verdict}")
+        print(f"  Score      : {result.score:.4f}")
+        print(f"  Feedback   : {result.feedback[:100]}")
+
+    return {
+        "task_id": task_id,
+        "task_name": env._task.get("name", task_id),
+        "difficulty": env._task.get("difficulty", task_id),
+        "score": result.score,
+        "feedback": result.feedback,
+    }
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--model", default=DEFAULT_MODEL)
+    parser.add_argument("--task", default=None)
+    parser.add_argument("--output-json", action="store_true")
+    args = parser.parse_args()
+
+    if GEMINI_API_KEY == "YOUR_GEMINI_API_KEY_HERE":
+        print("ERROR: Set GEMINI_API_KEY env variable or edit baseline.py", file=sys.stderr)
+        print("Get free key: https://aistudio.google.com/app/apikey", file=sys.stderr)
+        sys.exit(1)
+
+    client = OpenAI(api_key=GEMINI_API_KEY, base_url=GEMINI_BASE_URL)
+    task_ids = [args.task] if args.task else ["easy", "medium", "hard"]
+    results = [run_task(client, t, args.model, not args.output_json) for t in task_ids]
+
+    if args.output_json:
+        print(json.dumps({
+            "scores": [{"task_id": r["task_id"], "task_name": r["task_name"],
+                        "difficulty": r["difficulty"], "score": r["score"],
+                        "feedback": r["feedback"]} for r in results],
+            "model_used": args.model,
+            "note": "Temperature=0. Provider: Google Gemini free tier.",
+        }))
+    else:
+        print(f"\n{'='*60}\n  BASELINE SCORES\n{'='*60}")
+        for r in results:
+            bar = "█" * int(r["score"]*20) + "░" * (20 - int(r["score"]*20))
+            print(f"  {r['task_id']:8s} [{bar}] {r['score']:.4f}")
+        print(f"  Average: {sum(r['score'] for r in results)/len(results):.4f}")
+
+
+if __name__ == "__main__":
+    main()
