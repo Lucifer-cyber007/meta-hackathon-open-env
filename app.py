@@ -96,7 +96,7 @@ def root():
 def reset(request: Optional[ResetRequest] = None):
     """Reset the environment to a clean state. Returns the initial observation."""
     try:
-        task_id = request.task_id if request else "task_1"
+        task_id = request.task_id if request else "easy"
         obs = env.reset(task_id=task_id)
         return obs
     except ValueError as e:
