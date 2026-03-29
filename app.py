@@ -53,7 +53,7 @@ env = CodeReviewEnv()
 
 # FIX 1: task_id is fully optional — works with empty POST body too
 class ResetRequest(BaseModel):
-    task_id: Optional[str] = "task_1"
+    task_id: Optional[str] = "easy"
 
     model_config = {"extra": "allow"}
 
