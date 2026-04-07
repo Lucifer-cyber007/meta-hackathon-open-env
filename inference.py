@@ -7,9 +7,9 @@ Gemini free tier: 1500 requests/day on gemini-1.5-flash — no credit card neede
 Get your free API key at: https://aistudio.google.com/app/apikey
 
 Usage:
-    python baseline.py
-    python baseline.py --output-json      # used by /baseline endpoint
-    python baseline.py --task easy        # single task only
+    python inference.py
+    python inference.py --output-json      # used by /baseline endpoint
+    python inference.py --task easy        # single task only
 """
 
 import os
@@ -24,15 +24,9 @@ from graders import grade_episode
 from models import Action, CodeComment, GraderInput
 
 
-# ════════════════════════════════════════════════════════════
-# ▶▶  CHANGE 1: Put your free Gemini API key here
-#     OR set environment variable: export GEMINI_API_KEY=   
-#     Get free key at: https://aistudio.google.com/app/apikey
-# ════════════════════════════════════════════════════════════
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AIzaSyD4ZdqU7eAlnUXD_TNpTa0UiEvTSqghhCU")
-
 GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
-DEFAULT_MODEL = "gemini-3.1-flash-lite-preview"
+DEFAULT_MODEL = "gemini-2.0-flash"
 
 
 SYSTEM_PROMPT = """You are an expert code reviewer. You will be given a code diff from a pull request.
@@ -108,7 +102,10 @@ def run_task(client: OpenAI, task_id: str, model: str, verbose: bool = True) -> 
     obs = env.reset(task_id=task_id)
 
     if verbose:
-        print(f"\n{'='*60}\n  Task: {task_id.upper()} — {obs.file_name}\n{'='*60}")
+        print(f"\n{'='*60}\n  Task: {task_id.upper()} — {obs.file_name}\n{'='*60}", flush=True)
+
+    # ── REQUIRED: Print [START] block ──────────────────────────
+    print(f"[START] task={task_id}", flush=True)
 
     try:
         response = client.chat.completions.create(
@@ -123,10 +120,14 @@ def run_task(client: OpenAI, task_id: str, model: str, verbose: bool = True) -> 
         action = parse_llm_response(response.choices[0].message.content)
     except Exception as e:
         if verbose:
-            print(f"  [ERROR] {e}")
+            print(f"  [ERROR] {e}", flush=True)
         action = Action(comments=[], verdict="comment", summary=f"Error: {e}")
 
     _, reward, _, info = env.step(action)
+
+    # ── REQUIRED: Print [STEP] block ───────────────────────────
+    print(f"[STEP] step=1 reward={reward:.4f}", flush=True)
+
     episode_history = [{
         "step": 1,
         "action": action.model_dump(),
@@ -139,11 +140,14 @@ def run_task(client: OpenAI, task_id: str, model: str, verbose: bool = True) -> 
 
     result = grade_episode(GraderInput(task_id=task_id, episode_history=episode_history))
 
+    # ── REQUIRED: Print [END] block ────────────────────────────
+    print(f"[END] task={task_id} score={result.score:.4f} steps=1", flush=True)
+
     if verbose:
-        print(f"  Comments   : {len(action.comments)}")
-        print(f"  Verdict    : {action.verdict}")
-        print(f"  Score      : {result.score:.4f}")
-        print(f"  Feedback   : {result.feedback[:100]}")
+        print(f"  Comments   : {len(action.comments)}", flush=True)
+        print(f"  Verdict    : {action.verdict}", flush=True)
+        print(f"  Score      : {result.score:.4f}", flush=True)
+        print(f"  Feedback   : {result.feedback[:100]}", flush=True)
 
     return {
         "task_id": task_id,
@@ -162,7 +166,7 @@ def main():
     args = parser.parse_args()
 
     if GEMINI_API_KEY == "YOUR_GEMINI_API_KEY_HERE":
-        print("ERROR: Set GEMINI_API_KEY env variable or edit baseline.py", file=sys.stderr)
+        print("ERROR: Set GEMINI_API_KEY env variable or edit inference.py", file=sys.stderr)
         print("Get free key: https://aistudio.google.com/app/apikey", file=sys.stderr)
         sys.exit(1)
 
@@ -177,13 +181,13 @@ def main():
                         "feedback": r["feedback"]} for r in results],
             "model_used": args.model,
             "note": "Temperature=0. Provider: Google Gemini free tier.",
-        }))
+        }), flush=True)
     else:
-        print(f"\n{'='*60}\n  BASELINE SCORES\n{'='*60}")
+        print(f"\n{'='*60}\n  BASELINE SCORES\n{'='*60}", flush=True)
         for r in results:
-            bar = "█" * int(r["score"]*20) + "░" * (20 - int(r["score"]*20))
-            print(f"  {r['task_id']:8s} [{bar}] {r['score']:.4f}")
-        print(f"  Average: {sum(r['score'] for r in results)/len(results):.4f}")
+            print(f"  {r['task_id']:8s} {r['score']:.4f}", flush=True)
+        avg = sum(r['score'] for r in results) / len(results)
+        print(f"  Average: {avg:.4f}", flush=True)
 
 
 if __name__ == "__main__":
