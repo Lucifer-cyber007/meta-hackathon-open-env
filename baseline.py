@@ -24,15 +24,15 @@ from graders import grade_episode
 from models import Action, CodeComment, GraderInput
 
 
-# ════════════════════════════════════════════════════════════
-# ▶▶  CHANGE 1: Put your free Gemini API key here
-#     OR set environment variable: export GEMINI_API_KEY=   
-#     Get free key at: https://aistudio.google.com/app/apikey
-# ════════════════════════════════════════════════════════════
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AIzaSyD4ZdqU7eAlnUXD_TNpTa0UiEvTSqghhCU")
+# ── Priority: use the hackathon proxy vars first ──────────────────
+API_KEY = os.environ.get("API_KEY") or os.environ.get("GEMINI_API_KEY", "")
+API_BASE_URL = os.environ.get("API_BASE_URL") or "https://generativelanguage.googleapis.com/v1beta/openai/"
+DEFAULT_MODEL = os.environ.get("MODEL", "gpt-4o-mini")
 
-GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
-DEFAULT_MODEL = "gemini-3.1-flash-lite-preview"
+# Debug: log which endpoint we're hitting
+print(f"[CONFIG] API_BASE_URL={API_BASE_URL}", flush=True)
+print(f"[CONFIG] MODEL={DEFAULT_MODEL}", flush=True)
+print(f"[CONFIG] API_KEY set={'yes' if API_KEY else 'NO — MISSING!'}", flush=True)
 
 
 SYSTEM_PROMPT = """You are an expert code reviewer. You will be given a code diff from a pull request.
@@ -161,12 +161,11 @@ def main():
     parser.add_argument("--output-json", action="store_true")
     args = parser.parse_args()
 
-    if GEMINI_API_KEY == "YOUR_GEMINI_API_KEY_HERE":
-        print("ERROR: Set GEMINI_API_KEY env variable or edit baseline.py", file=sys.stderr)
-        print("Get free key: https://aistudio.google.com/app/apikey", file=sys.stderr)
+    if not API_KEY:
+        print("ERROR: No API_KEY or GEMINI_API_KEY env variable found.", file=sys.stderr)
         sys.exit(1)
 
-    client = OpenAI(api_key=GEMINI_API_KEY, base_url=GEMINI_BASE_URL)
+    client = OpenAI(api_key=API_KEY, base_url=API_BASE_URL)
     task_ids = [args.task] if args.task else ["easy", "medium", "hard"]
     results = [run_task(client, t, args.model, not args.output_json) for t in task_ids]
 
