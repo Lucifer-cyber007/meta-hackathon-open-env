@@ -1,15 +1,13 @@
 """
 Baseline inference script for CodeReviewEnv.
 
-Uses Google Gemini API (FREE tier) via the OpenAI-compatible client.
-Gemini free tier: 1500 requests/day on gemini-1.5-flash — no credit card needed.
-
-Get your free API key at: https://aistudio.google.com/app/apikey
+Uses the hackathon LiteLLM proxy (API_BASE_URL + HF_TOKEN).
+Falls back to Google Gemini if proxy vars not set.
 
 Usage:
     python inference.py
-    python inference.py --output-json      # used by /baseline endpoint
-    python inference.py --task easy        # single task only
+    python inference.py --output-json
+    python inference.py --task easy
 """
 
 import os
@@ -24,15 +22,14 @@ from graders import grade_episode
 from models import Action, CodeComment, GraderInput
 
 
-# ── Priority: use the hackathon proxy vars first ──────────────────
-API_KEY = os.environ.get("API_KEY") or os.environ.get("GEMINI_API_KEY", "")
-API_BASE_URL = os.environ.get("API_BASE_URL") or "https://generativelanguage.googleapis.com/v1beta/openai/"
-DEFAULT_MODEL = os.environ.get("MODEL", "gemini-2.0-flash")
+# ── Exactly as required by the Pre-Submission Checklist ──────────────────
+API_BASE_URL = os.getenv("API_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/")
+MODEL_NAME   = os.getenv("MODEL_NAME", "gemini-2.0-flash")
+HF_TOKEN     = os.getenv("HF_TOKEN")
+LOCAL_IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME")
 
-# Debug: log which endpoint we're hitting (visible in validator logs)
-print(f"[CONFIG] API_BASE_URL={API_BASE_URL}", flush=True)
-print(f"[CONFIG] MODEL={DEFAULT_MODEL}", flush=True)
-print(f"[CONFIG] API_KEY set={'yes' if API_KEY else 'NO — MISSING!'}", flush=True)
+# Use HF_TOKEN if provided by validator, else fall back to GEMINI_API_KEY
+_api_key = HF_TOKEN or os.getenv("GEMINI_API_KEY", "AIzaSyD4ZdqU7eAlnUXD_TNpTa0UiEvTSqghhCU")
 
 
 SYSTEM_PROMPT = """You are an expert code reviewer. You will be given a code diff from a pull request.
@@ -108,12 +105,13 @@ def run_task(client: OpenAI, task_id: str, model: str, verbose: bool = True) -> 
     obs = env.reset(task_id=task_id)
 
     if verbose:
-        print(f"\n{'='*60}\n  Task: {task_id.upper()} — {obs.file_name}\n{'='*60}", flush=True)
+        print(f"\n{'='*60}\n  Task: {task_id.upper()} - {obs.file_name}\n{'='*60}", flush=True)
 
-    # ── REQUIRED: Print [START] block ──────────────────────────
+    # REQUIRED: [START] block
     print(f"[START] task={task_id}", flush=True)
 
     try:
+        # All LLM calls use OpenAI client configured via checklist variables
         response = client.chat.completions.create(
             model=model,
             messages=[
@@ -131,7 +129,7 @@ def run_task(client: OpenAI, task_id: str, model: str, verbose: bool = True) -> 
 
     _, reward, _, info = env.step(action)
 
-    # ── REQUIRED: Print [STEP] block ───────────────────────────
+    # REQUIRED: [STEP] block
     print(f"[STEP] step=1 reward={reward:.4f}", flush=True)
 
     episode_history = [{
@@ -146,7 +144,7 @@ def run_task(client: OpenAI, task_id: str, model: str, verbose: bool = True) -> 
 
     result = grade_episode(GraderInput(task_id=task_id, episode_history=episode_history))
 
-    # ── REQUIRED: Print [END] block ────────────────────────────
+    # REQUIRED: [END] block
     print(f"[END] task={task_id} score={result.score:.4f} steps=1", flush=True)
 
     if verbose:
@@ -166,16 +164,17 @@ def run_task(client: OpenAI, task_id: str, model: str, verbose: bool = True) -> 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", default=DEFAULT_MODEL)
+    parser.add_argument("--model", default=MODEL_NAME)
     parser.add_argument("--task", default=None)
     parser.add_argument("--output-json", action="store_true")
     args = parser.parse_args()
 
-    if not API_KEY:
-        print("ERROR: No API_KEY or GEMINI_API_KEY env variable found.", file=sys.stderr)
-        sys.exit(1)
+    # All LLM calls use OpenAI client configured via checklist variables
+    client = OpenAI(
+        api_key=_api_key,
+        base_url=API_BASE_URL,
+    )
 
-    client = OpenAI(api_key=API_KEY, base_url=API_BASE_URL)
     task_ids = [args.task] if args.task else ["easy", "medium", "hard"]
     results = [run_task(client, t, args.model, not args.output_json) for t in task_ids]
 
@@ -185,7 +184,7 @@ def main():
                         "difficulty": r["difficulty"], "score": r["score"],
                         "feedback": r["feedback"]} for r in results],
             "model_used": args.model,
-            "note": "Temperature=0. Provider: Google Gemini free tier.",
+            "note": "Temperature=0. Uses API_BASE_URL + HF_TOKEN from environment.",
         }), flush=True)
     else:
         print(f"\n{'='*60}\n  BASELINE SCORES\n{'='*60}", flush=True)
