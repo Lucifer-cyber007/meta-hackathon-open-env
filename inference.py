@@ -27,7 +27,7 @@ from models import Action, CodeComment, GraderInput
 # ── Priority: use the hackathon proxy vars first ──────────────────
 API_KEY = os.environ.get("API_KEY") or os.environ.get("GEMINI_API_KEY", "")
 API_BASE_URL = os.environ.get("API_BASE_URL") or "https://generativelanguage.googleapis.com/v1beta/openai/"
-DEFAULT_MODEL = os.environ.get("MODEL", "gpt-4o-mini")
+DEFAULT_MODEL = os.environ.get("MODEL", "gemini-2.0-flash")
 
 # Debug: log which endpoint we're hitting (visible in validator logs)
 print(f"[CONFIG] API_BASE_URL={API_BASE_URL}", flush=True)
