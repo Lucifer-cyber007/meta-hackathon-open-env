@@ -59,6 +59,9 @@ class ResetRequest(BaseModel):
 
     model_config = {"extra": "allow"}
 
+class BaselineRequest(BaseModel):
+    task_id: Optional[str] = None
+
 
 class StepResponse(BaseModel):
     observation: Observation
@@ -83,14 +86,21 @@ class BaselineResponse(BaseModel):
 
 # ── Endpoints ─────────────────────────────────────────────────────────────
 
-@app.get("/", tags=["Health"])
-def root():
+@app.get("/health", tags=["Health"])
+def health():
     return {
         "status": "ok",
         "environment": "CodeReviewEnv",
         "version": "1.0.0",
         "endpoints": ["/reset", "/step", "/state", "/tasks", "/grader", "/baseline"],
     }
+
+@app.get("/", response_class=HTMLResponse, tags=["UI"])
+def root():
+    """Serve the web dashboard UI"""
+    html_path = os.path.join(os.path.dirname(__file__), "static", "index.html")
+    with open(html_path, "r", encoding="utf-8") as f:
+        return f.read()
 
 
 # FIX 2: Accept completely empty body by making request optional
@@ -197,42 +207,60 @@ def grader(grader_input: GraderInput):
         raise HTTPException(status_code=400, detail=str(e))
 
 
-# FIX 3: calls inference.py (renamed from baseline.py)
-@app.post("/baseline", response_model=BaselineResponse, tags=["OpenEnv"])
-def baseline():
+# FIX 3: runs inference explicitly in-process to capture AI findings
+@app.post("/baseline", tags=["OpenEnv"])
+def baseline(request: Optional[BaselineRequest] = None):
     """
     Trigger the baseline inference script.
-    Runs the agent against all 3 tasks and returns reproducible scores.
-    Note: requires GEMINI_API_KEY environment variable.
+    Runs the agent against all 3 tasks (or a specific task) and returns reproducible scores.
     """
+    import inference
+    from openai import OpenAI
+    
+    task_ids = [request.task_id] if request and request.task_id else ["easy", "medium", "hard"]
+    
+    # Monkey-patch to capture the LLM comments parsed by inference.py
+    captured_actions = {}
+    original_parse = inference.parse_llm_response
+    
+    def hooked_parse(content):
+        action = original_parse(content)
+        captured_actions['last'] = action
+        return action
+        
+    inference.parse_llm_response = hooked_parse
+    
     try:
-        import subprocess
-        import json
-        import sys
-
-        result = subprocess.run(
-            [sys.executable, "inference.py", "--output-json"],
-            capture_output=True,
-            text=True,
-            timeout=300,
+        client = OpenAI(
+            api_key=inference._api_key,
+            base_url=inference.API_BASE_URL,
         )
-
-        if result.returncode != 0:
-            raise HTTPException(
-                status_code=500,
-                detail=f"Baseline script failed: {result.stderr}",
-            )
-
-        scores_data = json.loads(result.stdout)
-        return BaselineResponse(
-            scores=scores_data["scores"],
-            model_used=scores_data.get("model_used", "gemini-2.0-flash"),
-            note=scores_data.get("note", ""),
-        )
-    except subprocess.TimeoutExpired:
-        raise HTTPException(status_code=504, detail="Baseline script timed out")
-    except json.JSONDecodeError as e:
+        
+        scores = []
+        for t in task_ids:
+            # We must pass verbose=False to mimic --output-json behavior
+            res = inference.run_task(client, t, inference.MODEL_NAME, verbose=False)
+            scores.append(res)
+            
+        ai_findings = []
+        verdict = "comment"
+        
+        if 'last' in captured_actions:
+            action = captured_actions['last']
+            ai_findings = [c.model_dump() for c in action.comments]
+            verdict = action.verdict
+            
+        return {
+            "scores": scores,
+            "model_used": inference.MODEL_NAME,
+            "note": "Temperature=0. Uses API_BASE_URL + HF_TOKEN from environment.",
+            "ai_findings": ai_findings,
+            "verdict": verdict
+        }
+    except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to parse baseline output: {e}")
+    finally:
+        inference.parse_llm_response = original_parse
 
 
 # ── Dashboard UI ─────────────────────────────────────────────────────────
