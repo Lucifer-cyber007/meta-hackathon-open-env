@@ -24,7 +24,7 @@ from models import Action, CodeComment, GraderInput
 
 # ── Exactly as required by the Pre-Submission Checklist ──────────────────
 API_BASE_URL = os.getenv("API_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/")
-MODEL_NAME   = os.getenv("MODEL_NAME", "gemini-1.5-flash")
+MODEL_NAME   = os.getenv("MODEL_NAME", "gemini-3.1-flash-lite-preview")
 HF_TOKEN     = os.getenv("HF_TOKEN")
 LOCAL_IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME")
 
