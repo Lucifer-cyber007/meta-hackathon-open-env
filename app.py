@@ -251,6 +251,36 @@ def baseline(request: Optional[BaselineRequest] = None):
         inference.parse_llm_response = original_parse
 
 
+# ── Debug Route ─────────────────────────────────────────────────────────
+
+@app.post("/debug-baseline", tags=["Debug"])
+def debug_baseline():
+    import inference
+    from openai import OpenAI
+
+    client = OpenAI(
+        api_key=inference._api_key,
+        base_url=inference.API_BASE_URL,
+    )
+
+    env = CodeReviewEnv()
+    obs = env.reset(task_id="easy")
+
+    try:
+        response = client.chat.completions.create(
+            model=inference.MODEL_NAME,
+            messages=[
+                {"role": "system", "content": inference.SYSTEM_PROMPT},
+                {"role": "user", "content": inference.build_user_prompt(obs.model_dump())},
+            ],
+            temperature=0.0,
+            max_tokens=2000,
+        )
+        raw = response.choices[0].message.content
+        return {"raw_response": raw}
+    except Exception as e:
+        return {"error": str(e)}
+
 # ── Dashboard UI ─────────────────────────────────────────────────────────
 
 @app.get("/dashboard", response_class=HTMLResponse, tags=["UI"])
