@@ -1,0 +1,1573 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CodeReviewEnv — AI Agent Training Environment</title>
+  <meta name="description" content="The first OpenEnv environment for training AI agents on real-world code review tasks. 3 tasks, dense rewards, deterministic grading. Built for Meta × Hugging Face." />
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet" />
+
+  <!-- highlight.js -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+
+  <style>
+    /* ── Reset & Tokens ─────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:          #0a0a0f;
+      --surface:     #12121a;
+      --surface2:    #161620;
+      --border:      #1e1e2e;
+      --border2:     #2a2a3e;
+      --purple:      #7c3aed;
+      --purple-dim:  #5b21b6;
+      --purple-glow: rgba(124,58,237,0.35);
+      --cyan:        #06b6d4;
+      --cyan-dim:    #0891b2;
+      --cyan-glow:   rgba(6,182,212,0.35);
+      --green:       #10b981;
+      --green-glow:  rgba(16,185,129,0.35);
+      --amber:       #f59e0b;
+      --amber-glow:  rgba(245,158,11,0.35);
+      --red:         #ef4444;
+      --red-glow:    rgba(239,68,68,0.35);
+      --text:        #f1f5f9;
+      --muted:       #64748b;
+      --muted2:      #475569;
+      --radius:      12px;
+      --radius-sm:   8px;
+      --nav-h:       68px;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'JetBrains Mono', monospace;
+      background: var(--bg);
+      color: var(--text);
+      overflow-x: hidden;
+      line-height: 1.6;
+    }
+
+    /* ── Scrollbar ──────────────────────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: var(--surface); }
+    ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--purple); }
+
+    /* ── Utility ────────────────────────────────────────────────────────── */
+    .container { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+    .sr-only    { position: absolute; width: 1px; height: 1px; clip: rect(0,0,0,0); overflow: hidden; }
+
+    /* ── Stagger animations ─────────────────────────────────────────────── */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(28px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; } to { opacity: 1; }
+    }
+    @keyframes blobMove1 {
+      0%,100% { transform: translate(0px,0px) scale(1); }
+      33%      { transform: translate(40px,-30px) scale(1.08); }
+      66%      { transform: translate(-20px,20px) scale(0.94); }
+    }
+    @keyframes blobMove2 {
+      0%,100% { transform: translate(0px,0px) scale(1); }
+      33%      { transform: translate(-50px,30px) scale(1.05); }
+      66%      { transform: translate(30px,-20px) scale(0.96); }
+    }
+    @keyframes blobMove3 {
+      0%,100% { transform: translate(0px,0px) scale(1); }
+      50%      { transform: translate(20px,40px) scale(1.06); }
+    }
+    @keyframes pulse {
+      0%,100% { opacity: 1; box-shadow: 0 0 0 0 var(--green-glow); }
+      50%      { opacity: 0.7; box-shadow: 0 0 0 6px transparent; }
+    }
+    @keyframes spin {
+      from { transform: rotate(0deg); } to { transform: rotate(360deg); }
+    }
+    @keyframes slideDown {
+      from { opacity: 0; transform: translateY(-10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes toastIn {
+      from { opacity: 0; transform: translateX(100px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+    @keyframes toastOut {
+      from { opacity: 1; transform: translateX(0); }
+      to   { opacity: 0; transform: translateX(120px); }
+    }
+    @keyframes scanline {
+      0%   { transform: translateY(-100%); }
+      100% { transform: translateY(100%); }
+    }
+    @keyframes gridPulse {
+      0%,100% { opacity: 0.03; } 50% { opacity: 0.07; }
+    }
+
+    .fade-up   { animation: fadeUp 0.7s cubic-bezier(0.22,1,0.36,1) both; }
+    .delay-1   { animation-delay: 0.1s; }
+    .delay-2   { animation-delay: 0.2s; }
+    .delay-3   { animation-delay: 0.3s; }
+    .delay-4   { animation-delay: 0.4s; }
+    .delay-5   { animation-delay: 0.5s; }
+    .delay-6   { animation-delay: 0.6s; }
+
+    /* ── NAV ────────────────────────────────────────────────────────────── */
+    #navbar {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+      height: var(--nav-h);
+      background: rgba(10,10,15,0.75);
+      backdrop-filter: blur(20px) saturate(180%);
+      -webkit-backdrop-filter: blur(20px) saturate(180%);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center;
+      transition: background 0.3s;
+    }
+    #navbar .container {
+      display: flex; align-items: center; justify-content: space-between; width: 100%;
+    }
+    .nav-logo {
+      display: flex; align-items: center; gap: 10px;
+      font-family: 'Space Grotesk', sans-serif;
+      font-weight: 700; font-size: 18px; color: var(--text);
+      text-decoration: none; letter-spacing: -0.3px;
+    }
+    .nav-logo-icon {
+      width: 32px; height: 32px;
+      background: linear-gradient(135deg, var(--purple), var(--cyan));
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .nav-logo-icon svg { width: 18px; height: 18px; stroke: #fff; fill: none; stroke-width: 2; }
+    .nav-links {
+      display: flex; align-items: center; gap: 4px;
+      list-style: none;
+    }
+    .nav-links a {
+      color: var(--muted); text-decoration: none; font-size: 13px;
+      padding: 6px 14px; border-radius: 6px;
+      transition: color 0.2s, background 0.2s;
+      letter-spacing: 0.01em;
+    }
+    .nav-links a:hover { color: var(--text); background: rgba(255,255,255,0.05); }
+    .nav-right { display: flex; align-items: center; gap: 10px; }
+    .live-badge {
+      display: flex; align-items: center; gap: 7px;
+      background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.25);
+      border-radius: 20px; padding: 5px 12px;
+      font-size: 12px; color: var(--green);
+    }
+    .live-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--green); flex-shrink: 0;
+      animation: pulse 2s ease-in-out infinite;
+    }
+    .live-dot.offline { background: var(--red); animation: none; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 7px;
+      padding: 8px 16px; border-radius: var(--radius-sm);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px; font-weight: 500; cursor: pointer;
+      text-decoration: none; border: none; outline: none;
+      transition: all 0.2s ease;
+    }
+    .btn-ghost {
+      background: transparent; color: var(--muted);
+      border: 1px solid var(--border2);
+    }
+    .btn-ghost:hover {
+      color: var(--text); border-color: var(--muted2);
+      background: rgba(255,255,255,0.04);
+    }
+    .btn-purple {
+      background: var(--purple); color: #fff;
+      box-shadow: 0 0 20px var(--purple-glow);
+    }
+    .btn-purple:hover {
+      background: #8b47ff;
+      box-shadow: 0 0 30px rgba(124,58,237,0.5);
+      transform: translateY(-1px);
+    }
+    .btn-cyan {
+      background: var(--cyan); color: #0a0a0f;
+      box-shadow: 0 0 20px var(--cyan-glow); font-weight: 600;
+    }
+    .btn-cyan:hover {
+      background: #22d3ee;
+      box-shadow: 0 0 30px rgba(6,182,212,0.5);
+      transform: translateY(-1px);
+    }
+    .btn-outline {
+      background: transparent; color: var(--text);
+      border: 1px solid var(--border2);
+    }
+    .btn-outline:hover {
+      border-color: var(--purple); color: var(--purple);
+      box-shadow: 0 0 16px var(--purple-glow);
+    }
+    .btn svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; flex-shrink: 0; }
+
+    /* Hamburger */
+    .hamburger {
+      display: none; flex-direction: column; gap: 5px; cursor: pointer;
+      background: none; border: none; padding: 4px;
+    }
+    .hamburger span {
+      display: block; width: 22px; height: 2px;
+      background: var(--muted); border-radius: 2px;
+      transition: all 0.3s;
+    }
+    .mobile-menu {
+      display: none; position: fixed; top: var(--nav-h); left: 0; right: 0;
+      background: rgba(10,10,15,0.97); backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border); z-index: 999;
+      animation: slideDown 0.25s ease both;
+    }
+    .mobile-menu.open { display: block; }
+    .mobile-menu ul { list-style: none; padding: 16px; }
+    .mobile-menu a {
+      display: block; color: var(--muted); text-decoration: none;
+      padding: 12px 16px; border-radius: 8px; font-size: 14px;
+      transition: all 0.2s;
+    }
+    .mobile-menu a:hover { color: var(--text); background: rgba(255,255,255,0.05); }
+
+    /* ── HERO ───────────────────────────────────────────────────────────── */
+    #hero {
+      min-height: 100vh; display: flex; align-items: center;
+      position: relative; overflow: hidden;
+      padding-top: var(--nav-h);
+    }
+    .hero-bg {
+      position: absolute; inset: 0; z-index: 0; pointer-events: none;
+    }
+    /* Animated grid */
+    .hero-grid {
+      position: absolute; inset: 0;
+      background-image:
+        linear-gradient(rgba(124,58,237,0.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(124,58,237,0.06) 1px, transparent 1px);
+      background-size: 60px 60px;
+      animation: gridPulse 4s ease-in-out infinite;
+    }
+    /* Blobs */
+    .blob {
+      position: absolute; border-radius: 50%; filter: blur(80px);
+      pointer-events: none;
+    }
+    .blob-1 {
+      width: 600px; height: 600px;
+      background: radial-gradient(circle, rgba(124,58,237,0.25) 0%, transparent 70%);
+      top: -150px; left: -100px;
+      animation: blobMove1 18s ease-in-out infinite;
+    }
+    .blob-2 {
+      width: 500px; height: 500px;
+      background: radial-gradient(circle, rgba(6,182,212,0.2) 0%, transparent 70%);
+      top: 20%; right: -100px;
+      animation: blobMove2 22s ease-in-out infinite;
+    }
+    .blob-3 {
+      width: 350px; height: 350px;
+      background: radial-gradient(circle, rgba(124,58,237,0.15) 0%, transparent 70%);
+      bottom: 10%; left: 30%;
+      animation: blobMove3 15s ease-in-out infinite;
+    }
+    /* Scanline */
+    .hero-scanline {
+      position: absolute; inset: 0;
+      background: linear-gradient(to bottom, transparent 0%, rgba(124,58,237,0.04) 50%, transparent 100%);
+      height: 200px;
+      animation: scanline 8s linear infinite;
+    }
+
+    .hero-content {
+      position: relative; z-index: 1;
+      display: flex; flex-direction: column;
+      align-items: center; text-align: center;
+      width: 100%; padding: 80px 0;
+    }
+    .hero-eyebrow {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: rgba(124,58,237,0.12); border: 1px solid rgba(124,58,237,0.3);
+      border-radius: 20px; padding: 6px 16px;
+      font-size: 12px; color: #a78bfa; letter-spacing: 0.08em;
+      text-transform: uppercase; margin-bottom: 28px;
+    }
+    .hero-eyebrow span { display: flex; align-items: center; gap: 6px; }
+    .hero-eyebrow .dot { width: 6px; height: 6px; border-radius: 50%; background: #a78bfa; }
+    .hero-title {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: clamp(42px, 6vw, 76px);
+      font-weight: 700; line-height: 1.05;
+      letter-spacing: -2px; margin-bottom: 24px;
+      max-width: 900px;
+    }
+    .hero-title .grad {
+      background: linear-gradient(90deg, #a78bfa, #06b6d4, #7c3aed);
+      background-size: 200%;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero-sub {
+      font-size: 18px; color: var(--muted); max-width: 600px;
+      margin-bottom: 40px; line-height: 1.75; font-weight: 400;
+    }
+    .hero-ctas { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; margin-bottom: 56px; }
+    .hero-ctas .btn { font-size: 15px; padding: 12px 28px; }
+
+    .stat-pills {
+      display: flex; gap: 12px; flex-wrap: wrap; justify-content: center;
+    }
+    .stat-pill {
+      display: flex; align-items: center; gap: 10px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border2);
+      border-radius: 20px; padding: 10px 20px;
+      font-size: 13px; color: var(--muted);
+      transition: all 0.2s;
+    }
+    .stat-pill:hover {
+      border-color: var(--purple);
+      box-shadow: 0 0 16px var(--purple-glow);
+      color: var(--text);
+    }
+    .stat-pill .val {
+      font-family: 'Space Grotesk', sans-serif;
+      font-weight: 700; font-size: 15px; color: var(--text);
+    }
+
+    /* ── SECTIONS ───────────────────────────────────────────────────────── */
+    .section { padding: 100px 0; }
+    .section-sm { padding: 70px 0; }
+    .section-label {
+      font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+      color: var(--purple); margin-bottom: 12px; font-weight: 600;
+    }
+    .section-title {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: clamp(30px, 4vw, 46px);
+      font-weight: 700; letter-spacing: -1px;
+      margin-bottom: 14px; line-height: 1.15;
+    }
+    .section-sub {
+      font-size: 15px; color: var(--muted);
+      max-width: 560px; line-height: 1.7;
+    }
+    .section-header { margin-bottom: 56px; }
+    hr.divider {
+      border: none; border-top: 1px solid var(--border);
+      margin: 0;
+    }
+
+    /* ── BASELINE SCORES ────────────────────────────────────────────────── */
+    .score-grid {
+      display: grid; grid-template-columns: repeat(3,1fr); gap: 24px;
+    }
+    .score-card {
+      background: rgba(18,18,26,0.7);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 32px;
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      position: relative; overflow: hidden;
+      transition: transform 0.25s, box-shadow 0.25s, border-color 0.25s;
+    }
+    .score-card::before {
+      content: ''; position: absolute;
+      top: 0; left: 0; right: 0; height: 2px;
+    }
+    .score-card.easy::before   { background: var(--green); box-shadow: 0 0 12px var(--green); }
+    .score-card.medium::before { background: var(--amber); box-shadow: 0 0 12px var(--amber); }
+    .score-card.hard::before   { background: var(--red);   box-shadow: 0 0 12px var(--red); }
+
+    .score-card:hover { transform: translateY(-4px); }
+    .score-card.easy:hover   { border-color: var(--green);  box-shadow: 0 8px 40px rgba(16,185,129,0.15); }
+    .score-card.medium:hover { border-color: var(--amber);  box-shadow: 0 8px 40px rgba(245,158,11,0.15); }
+    .score-card.hard:hover   { border-color: var(--red);    box-shadow: 0 8px 40px rgba(239,68,68,0.15); }
+
+    /* Holographic shimmer */
+    .score-card::after {
+      content: ''; position: absolute; inset: 0;
+      background: linear-gradient(105deg, transparent 40%, rgba(255,255,255,0.015) 50%, transparent 60%);
+      pointer-events: none;
+    }
+
+    .diff-badge {
+      display: inline-block; font-size: 11px; font-weight: 700;
+      letter-spacing: 0.1em; padding: 3px 10px; border-radius: 4px;
+      margin-bottom: 14px;
+    }
+    .easy   .diff-badge { background: rgba(16,185,129,0.15); color: var(--green); border: 1px solid rgba(16,185,129,0.3); }
+    .medium .diff-badge { background: rgba(245,158,11,0.15); color: var(--amber); border: 1px solid rgba(245,158,11,0.3); }
+    .hard   .diff-badge { background: rgba(239,68,68,0.15);  color: var(--red);   border: 1px solid rgba(239,68,68,0.3); }
+
+    .card-title {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 18px; font-weight: 600;
+      margin-bottom: 6px; color: var(--text);
+    }
+    .card-file {
+      font-size: 12px; color: var(--muted);
+      margin-bottom: 28px;
+    }
+    .score-num {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 64px; font-weight: 700; line-height: 1;
+      margin-bottom: 18px;
+    }
+    .easy   .score-num { color: var(--green); text-shadow: 0 0 30px var(--green-glow); }
+    .medium .score-num { color: var(--amber); text-shadow: 0 0 30px var(--amber-glow); }
+    .hard   .score-num { color: var(--red);   text-shadow: 0 0 30px var(--red-glow); }
+
+    .score-bar-track {
+      background: var(--border); border-radius: 4px; height: 6px;
+      margin-bottom: 16px; overflow: hidden;
+    }
+    .score-bar-fill {
+      height: 100%; border-radius: 4px; width: 0%;
+      transition: width 1.4s cubic-bezier(0.22,1,0.36,1);
+    }
+    .easy   .score-bar-fill { background: linear-gradient(90deg, #059669, var(--green)); box-shadow: 0 0 8px var(--green); }
+    .medium .score-bar-fill { background: linear-gradient(90deg, #d97706, var(--amber)); box-shadow: 0 0 8px var(--amber); }
+    .hard   .score-bar-fill { background: linear-gradient(90deg, #dc2626, var(--red));   box-shadow: 0 0 8px var(--red); }
+
+    .card-meta { font-size: 12px; color: var(--muted); }
+
+    /* ── DEMO SECTION ───────────────────────────────────────────────────── */
+    #demo { background: linear-gradient(180deg, var(--bg) 0%, #0d0d18 100%); }
+    .demo-layout {
+      display: grid; grid-template-columns: 2fr 3fr; gap: 24px;
+      align-items: start;
+    }
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .panel-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(255,255,255,0.02);
+    }
+    .panel-title {
+      font-size: 12px; font-weight: 600; letter-spacing: 0.06em;
+      text-transform: uppercase; color: var(--muted);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .panel-title .dot-indicator {
+      width: 8px; height: 8px; border-radius: 50%; background: var(--green);
+      animation: pulse 2s ease-in-out infinite;
+    }
+    .panel-body { padding: 20px; }
+
+    /* Form controls */
+    label.field-label {
+      display: block; font-size: 11px; color: var(--muted);
+      letter-spacing: 0.06em; text-transform: uppercase;
+      margin-bottom: 8px; margin-top: 18px;
+    }
+    label.field-label:first-child { margin-top: 0; }
+    select, input[type="number"], textarea {
+      width: 100%; background: var(--bg);
+      border: 1px solid var(--border2); border-radius: var(--radius-sm);
+      color: var(--text); font-family: 'JetBrains Mono', monospace;
+      font-size: 13px; padding: 10px 14px; outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      appearance: none; -webkit-appearance: none;
+    }
+    select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 36px; cursor: pointer; }
+    select:focus, input[type="number"]:focus, textarea:focus {
+      border-color: var(--purple);
+      box-shadow: 0 0 0 3px var(--purple-glow);
+    }
+    textarea { resize: vertical; min-height: 72px; }
+
+    .btn-full { width: 100%; justify-content: center; font-size: 14px; padding: 13px; margin-top: 6px; }
+    .step-divider {
+      border: none; border-top: 1px solid var(--border);
+      margin: 20px 0;
+    }
+    .step-label {
+      font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--purple); font-weight: 600; margin-bottom: 14px;
+    }
+
+    #controls-step2 { display: none; }
+    #controls-step2.visible { display: block; animation: slideDown 0.3s ease both; }
+
+    /* Loading spinner */
+    .spinner {
+      width: 18px; height: 18px; border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: #fff; border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      display: inline-block;
+    }
+    .loading { opacity: 0.7; pointer-events: none; }
+
+    /* Diff viewer */
+    .diff-viewer {
+      background: #1a1b26; border-radius: 0;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12.5px; line-height: 1.7;
+      overflow-x: auto; overflow-y: auto;
+      max-height: 380px; padding: 0;
+      position: relative;
+    }
+    .diff-viewer::-webkit-scrollbar { width: 4px; height: 4px; }
+    .diff-viewer .diff-line {
+      display: flex; min-width: max-content;
+      padding: 0 16px; border-left: 3px solid transparent;
+    }
+    .diff-viewer .diff-line.add    { background: rgba(16,185,129,0.08); border-left-color: var(--green); }
+    .diff-viewer .diff-line.remove { background: rgba(239,68,68,0.08);  border-left-color: var(--red); }
+    .diff-viewer .diff-line.header { background: rgba(124,58,237,0.08); border-left-color: var(--purple); color: var(--purple); }
+    .diff-viewer .line-num {
+      width: 36px; flex-shrink: 0; color: var(--muted2); text-align: right;
+      margin-right: 16px; user-select: none; font-size: 11px; padding-top: 1px;
+    }
+    .diff-viewer .line-content { color: var(--text); white-space: pre; flex: 1; }
+    .diff-viewer .diff-line.add    .line-content { color: #a6e3a1; }
+    .diff-viewer .diff-line.remove .line-content { color: #f38ba8; }
+    .diff-viewer .diff-line.header .line-content { color: #cba6f7; }
+    .diff-placeholder {
+      padding: 60px 20px; text-align: center; color: var(--muted);
+      font-size: 13px; display: flex; flex-direction: column;
+      align-items: center; gap: 12px;
+    }
+    .diff-placeholder svg { width: 40px; height: 40px; stroke: var(--border2); fill: none; stroke-width: 1.5; }
+
+    /* Reward panel */
+    #reward-panel { display: none; }
+    #reward-panel.visible { display: block; animation: slideDown 0.4s ease both; }
+    .reward-panel-inner { padding: 20px; }
+    .reward-score-display {
+      text-align: center; padding: 24px 0;
+    }
+    .reward-score-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 8px; }
+    .reward-score-val {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 72px; font-weight: 700; line-height: 1;
+    }
+    .reward-score-val.positive { color: var(--green); text-shadow: 0 0 40px var(--green-glow); }
+    .reward-score-val.negative { color: var(--red);   text-shadow: 0 0 40px var(--red-glow); }
+
+    .reward-breakdown {
+      background: var(--bg); border-radius: var(--radius-sm);
+      border: 1px solid var(--border); overflow: hidden; margin-bottom: 14px;
+    }
+    .reward-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 16px; border-bottom: 1px solid var(--border);
+      font-size: 13px;
+    }
+    .reward-row:last-child { border-bottom: none; }
+    .reward-row .rk { color: var(--muted); }
+    .reward-row .rv { font-weight: 600; font-family: 'Space Grotesk', sans-serif; }
+    .rv.pos { color: var(--green); }
+    .rv.neg { color: var(--red); }
+
+    .status-badges { display: flex; gap: 8px; flex-wrap: wrap; }
+    .status-badge {
+      font-size: 11px; padding: 4px 10px; border-radius: 4px;
+      font-weight: 600; letter-spacing: 0.06em;
+    }
+    .badge-done     { background: rgba(16,185,129,0.15); color: var(--green); border: 1px solid rgba(16,185,129,0.3); }
+    .badge-progress { background: rgba(124,58,237,0.15); color: #a78bfa;      border: 1px solid rgba(124,58,237,0.3); }
+    .badge-step     { background: rgba(6,182,212,0.12);  color: var(--cyan);  border: 1px solid rgba(6,182,212,0.3); }
+
+    /* ── HOW IT WORKS ───────────────────────────────────────────────────── */
+    .steps-row {
+      display: flex; align-items: stretch; gap: 0;
+    }
+    .step-card {
+      flex: 1; background: var(--surface);
+      border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 32px 28px; position: relative;
+      transition: all 0.25s;
+    }
+    .step-card:hover {
+      border-color: var(--purple);
+      box-shadow: 0 0 30px var(--purple-glow);
+      transform: translateY(-3px);
+    }
+    .step-arrow {
+      align-self: center; padding: 0 16px; color: var(--muted2);
+      font-size: 22px; flex-shrink: 0;
+    }
+    .step-num {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 48px; font-weight: 700; line-height: 1;
+      color: var(--border2); margin-bottom: 16px;
+    }
+    .step-card-title {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 20px; font-weight: 600; margin-bottom: 8px;
+    }
+    .step-endpoint {
+      display: inline-block;
+      background: rgba(124,58,237,0.12); border: 1px solid rgba(124,58,237,0.25);
+      border-radius: 4px; padding: 2px 8px;
+      font-size: 12px; color: var(--purple); margin-bottom: 12px;
+    }
+    .step-desc { font-size: 13px; color: var(--muted); line-height: 1.7; }
+
+    /* ── TASKS ──────────────────────────────────────────────────────────── */
+    .tasks-grid {
+      display: grid; grid-template-columns: repeat(3,1fr); gap: 24px;
+    }
+    .task-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 28px;
+      display: flex; flex-direction: column;
+      transition: all 0.25s; cursor: pointer;
+    }
+    .task-card:hover {
+      transform: translateY(-4px);
+    }
+    .task-card.easy:hover   { border-color: var(--green);  box-shadow: 0 0 30px rgba(16,185,129,0.12); }
+    .task-card.medium:hover { border-color: var(--amber);  box-shadow: 0 0 30px rgba(245,158,11,0.12); }
+    .task-card.hard:hover   { border-color: var(--red);    box-shadow: 0 0 30px rgba(239,68,68,0.12); }
+
+    .task-card-top {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .task-name {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 18px; font-weight: 600; margin-bottom: 6px;
+    }
+    .task-file {
+      font-size: 11px; color: var(--muted); margin-bottom: 14px;
+      font-style: italic;
+    }
+    .task-desc { font-size: 13px; color: var(--muted); line-height: 1.7; margin-bottom: 20px; flex: 1; }
+    .task-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 20px; }
+    .tag {
+      font-size: 11px; padding: 3px 8px; border-radius: 4px;
+      background: rgba(255,255,255,0.05); color: var(--muted);
+      border: 1px solid var(--border);
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .task-meta {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 12px; color: var(--muted2); margin-bottom: 20px;
+    }
+    .task-meta .sep { color: var(--border); }
+    .task-try-btn {
+      margin-top: auto;
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 13px; color: var(--purple); cursor: pointer;
+      background: none; border: none; padding: 0; font-family: inherit;
+      transition: gap 0.2s;
+    }
+    .task-try-btn:hover { gap: 10px; }
+
+    /* ── API REFERENCE ──────────────────────────────────────────────────── */
+    #api { background: var(--surface2); }
+    .api-table-wrap { overflow-x: auto; border-radius: var(--radius); border: 1px solid var(--border); }
+    .api-table { width: 100%; border-collapse: collapse; min-width: 700px; }
+    .api-table th {
+      background: rgba(255,255,255,0.03);
+      padding: 14px 18px; text-align: left;
+      font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--muted); border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    .api-table td {
+      padding: 14px 18px; border-bottom: 1px solid rgba(30,30,46,0.6);
+      font-size: 13px; vertical-align: middle;
+    }
+    .api-table tr:last-child td { border-bottom: none; }
+    .api-table tr:hover td { background: rgba(255,255,255,0.02); }
+    .method-badge {
+      display: inline-block; font-size: 10px; font-weight: 700;
+      padding: 3px 8px; border-radius: 4px; letter-spacing: 0.06em;
+      white-space: nowrap;
+    }
+    .method-get  { background: rgba(6,182,212,0.15);  color: var(--cyan);   border: 1px solid rgba(6,182,212,0.3); }
+    .method-post { background: rgba(124,58,237,0.15); color: #a78bfa;       border: 1px solid rgba(124,58,237,0.3); }
+    .endpoint-cell { font-family: 'JetBrains Mono', monospace; color: var(--text); }
+    .desc-cell { color: var(--muted); }
+    .copy-btn {
+      background: var(--bg); border: 1px solid var(--border2);
+      color: var(--muted); border-radius: 6px; padding: 5px 12px;
+      font-size: 11px; cursor: pointer; font-family: inherit;
+      transition: all 0.2s; white-space: nowrap;
+    }
+    .copy-btn:hover { color: var(--text); border-color: var(--purple); box-shadow: 0 0 10px var(--purple-glow); }
+    .copy-btn.copied { color: var(--green); border-color: rgba(16,185,129,0.4); }
+
+    /* ── FOOTER ─────────────────────────────────────────────────────────── */
+    footer {
+      padding: 40px 0;
+      border-top: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .footer-inner {
+      display: flex; align-items: center; justify-content: space-between;
+      flex-wrap: wrap; gap: 16px;
+    }
+    .footer-left { font-size: 12px; color: var(--muted2); line-height: 1.6; }
+    .footer-left strong { color: var(--muted); }
+    .footer-right { display: flex; gap: 12px; }
+    .footer-icon-btn {
+      width: 36px; height: 36px;
+      display: flex; align-items: center; justify-content: center;
+      background: var(--bg); border: 1px solid var(--border2);
+      border-radius: 8px; color: var(--muted); text-decoration: none;
+      transition: all 0.2s;
+    }
+    .footer-icon-btn:hover {
+      color: var(--text); border-color: var(--purple);
+      box-shadow: 0 0 12px var(--purple-glow);
+    }
+    .footer-icon-btn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; }
+
+    /* ── TOAST ──────────────────────────────────────────────────────────── */
+    #toast-container {
+      position: fixed; bottom: 24px; right: 24px; z-index: 9999;
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    .toast {
+      display: flex; align-items: center; gap: 12px;
+      background: var(--surface); border: 1px solid var(--border2);
+      border-radius: var(--radius-sm); padding: 12px 18px;
+      font-size: 13px; min-width: 280px; max-width: 380px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      animation: toastIn 0.3s cubic-bezier(0.22,1,0.36,1) both;
+    }
+    .toast.removing { animation: toastOut 0.3s ease both; }
+    .toast.success  { border-left: 3px solid var(--green); }
+    .toast.error    { border-left: 3px solid var(--red); }
+    .toast.info     { border-left: 3px solid var(--cyan); }
+    .toast-icon { font-size: 16px; flex-shrink: 0; }
+    .toast-msg  { flex: 1; color: var(--text); }
+    .toast-close {
+      background: none; border: none; color: var(--muted);
+      cursor: pointer; font-size: 16px; padding: 0; line-height: 1;
+      flex-shrink: 0;
+    }
+
+    /* ── Responsive ─────────────────────────────────────────────────────── */
+    @media (max-width: 900px) {
+      .score-grid, .tasks-grid { grid-template-columns: 1fr 1fr; }
+      .demo-layout { grid-template-columns: 1fr; }
+      .steps-row { flex-direction: column; gap: 16px; }
+      .step-arrow { display: none; }
+      .nav-links { display: none; }
+      .hamburger { display: flex; }
+    }
+    @media (max-width: 640px) {
+      .score-grid, .tasks-grid { grid-template-columns: 1fr; }
+      .hero-ctas { flex-direction: column; align-items: stretch; }
+      .hero-ctas .btn { text-align: center; justify-content: center; }
+      .footer-inner { flex-direction: column; }
+      .nav-right .btn-ghost, .nav-right .btn-purple { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── TOAST CONTAINER ─────────────────────────────────────────────────── -->
+<div id="toast-container" aria-live="polite"></div>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<!-- NAVBAR                                                                -->
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<nav id="navbar" role="navigation" aria-label="Main navigation">
+  <div class="container">
+    <a href="#hero" class="nav-logo" id="nav-logo">
+      <div class="nav-logo-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/><line x1="12" y1="2" x2="12" y2="22" stroke-dasharray="3 3"/></svg>
+      </div>
+      CodeReviewEnv
+    </a>
+
+    <ul class="nav-links">
+      <li><a href="#baseline">Overview</a></li>
+      <li><a href="#demo">Live Demo</a></li>
+      <li><a href="#tasks">Tasks</a></li>
+      <li><a href="#api">API Docs</a></li>
+    </ul>
+
+    <div class="nav-right">
+      <div class="live-badge" id="live-badge" title="Server health status">
+        <span class="live-dot" id="live-dot"></span>
+        <span id="live-text">Checking…</span>
+      </div>
+      <a href="https://github.com/Lucifer-cyber007/meta-hackathon-open-env" target="_blank" rel="noopener" class="btn btn-ghost" id="nav-github-btn">
+        <svg viewBox="0 0 24 24"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+        GitHub
+      </a>
+      <a href="https://huggingface.co/spaces/lucifer0077/code-review-env" target="_blank" rel="noopener" class="btn btn-purple" id="nav-hf-btn">🤗 HuggingFace</a>
+      <button class="hamburger" id="hamburger" aria-label="Open menu" aria-expanded="false">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </div>
+</nav>
+
+<!-- Mobile menu -->
+<div class="mobile-menu" id="mobile-menu" role="dialog" aria-label="Mobile navigation">
+  <ul>
+    <li><a href="#baseline" onclick="closeMenu()">Overview</a></li>
+    <li><a href="#demo"     onclick="closeMenu()">Live Demo</a></li>
+    <li><a href="#tasks"    onclick="closeMenu()">Tasks</a></li>
+    <li><a href="#api"      onclick="closeMenu()">API Docs</a></li>
+    <li><a href="https://github.com/Lucifer-cyber007/meta-hackathon-open-env" target="_blank" rel="noopener">GitHub ↗</a></li>
+    <li><a href="https://huggingface.co/spaces/lucifer0077/code-review-env"    target="_blank" rel="noopener">HuggingFace 🤗 ↗</a></li>
+  </ul>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<!-- HERO                                                                  -->
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<section id="hero">
+  <div class="hero-bg" aria-hidden="true">
+    <div class="hero-grid"></div>
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+    <div class="blob blob-3"></div>
+    <div class="hero-scanline"></div>
+  </div>
+  <div class="container">
+    <div class="hero-content">
+      <div class="hero-eyebrow fade-up">
+        <span><span class="dot"></span> Meta × Hugging Face OpenEnv Hackathon 2025</span>
+      </div>
+      <h1 class="hero-title fade-up delay-1">
+        Train AI Agents to<br/><span class="grad">Review Code</span>
+      </h1>
+      <p class="hero-sub fade-up delay-2">
+        The first OpenEnv environment for real-world code review.
+        3 tasks, dense rewards, deterministic grading.
+      </p>
+      <div class="hero-ctas fade-up delay-3">
+        <a href="#demo" class="btn btn-purple" id="hero-demo-btn">
+          <svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          Try Live Demo
+        </a>
+        <a href="https://github.com/Lucifer-cyber007/meta-hackathon-open-env" target="_blank" rel="noopener" class="btn btn-outline" id="hero-github-btn">
+          <svg viewBox="0 0 24 24"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+          View on GitHub
+        </a>
+      </div>
+      <div class="stat-pills fade-up delay-4">
+        <div class="stat-pill"><span class="val">3</span> Tasks</div>
+        <div class="stat-pill"><span class="val">7</span> API Endpoints</div>
+        <div class="stat-pill"><span class="val">0.71</span> Avg Score</div>
+        <div class="stat-pill"><span class="val">100%</span> Deterministic</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider" />
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<!-- BASELINE SCORES                                                       -->
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<section class="section" id="baseline">
+  <div class="container">
+    <div class="section-header fade-up">
+      <div class="section-label">Performance Benchmarks</div>
+      <h2 class="section-title">Baseline Performance</h2>
+      <p class="section-sub">Scores achieved by <strong>Gemini 2.0 Flash</strong> on each task — used as the reference baseline.</p>
+    </div>
+
+    <div class="score-grid">
+      <!-- EASY -->
+      <div class="score-card easy fade-up delay-1" data-score="0.95" data-target="95" id="score-easy">
+        <span class="diff-badge">EASY</span>
+        <h3 class="card-title">Basic Bug Detection</h3>
+        <p class="card-file">📄 utils/statistics.py</p>
+        <div class="score-num" id="num-easy">0.00</div>
+        <div class="score-bar-track"><div class="score-bar-fill" id="bar-easy"></div></div>
+        <p class="card-meta">4 hidden bugs • Max 3 steps</p>
+      </div>
+
+      <!-- MEDIUM -->
+      <div class="score-card medium fade-up delay-2" data-score="0.90" data-target="90" id="score-medium">
+        <span class="diff-badge">MEDIUM</span>
+        <h3 class="card-title">Security Vulnerability Review</h3>
+        <p class="card-file">📄 auth/user_manager.py</p>
+        <div class="score-num" id="num-medium">0.00</div>
+        <div class="score-bar-track"><div class="score-bar-fill" id="bar-medium"></div></div>
+        <p class="card-meta">8 vulnerabilities • Max 5 steps</p>
+      </div>
+
+      <!-- HARD -->
+      <div class="score-card hard fade-up delay-3" data-score="0.29" data-target="29" id="score-hard">
+        <span class="diff-badge">HARD</span>
+        <h3 class="card-title">Concurrency Bug Hunt</h3>
+        <p class="card-file">📄 core/rate_limiter.py</p>
+        <div class="score-num" id="num-hard">0.00</div>
+        <div class="score-bar-track"><div class="score-bar-fill" id="bar-hard"></div></div>
+        <p class="card-meta">8 subtle bugs • Max 8 steps</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider" />
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<!-- LIVE DEMO                                                             -->
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<section class="section" id="demo">
+  <div class="container">
+    <div class="section-header fade-up">
+      <div class="section-label">Interactive Playground</div>
+      <h2 class="section-title">Live Environment Demo</h2>
+      <p class="section-sub">Interact with the environment in real time. Select a task, start a review, and submit your findings.</p>
+    </div>
+
+    <div class="demo-layout">
+      <!-- LEFT: Controls -->
+      <div class="panel fade-up delay-1">
+        <div class="panel-header">
+          <span class="panel-title">
+            <span class="dot-indicator"></span>
+            CONTROL PANEL
+          </span>
+        </div>
+        <div class="panel-body">
+          <!-- Step 1 -->
+          <div class="step-label">Step 1 — Select Task</div>
+          <label class="field-label" for="task-select">Task Difficulty</label>
+          <select id="task-select" aria-label="Select task difficulty">
+            <option value="easy">Easy — Basic Bug Detection</option>
+            <option value="medium">Medium — Security Review</option>
+            <option value="hard">Hard — Concurrency Hunt</option>
+          </select>
+
+          <button class="btn btn-purple btn-full" id="start-btn" style="margin-top:16px;" onclick="startReview()">
+            <svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            Start Review
+          </button>
+
+          <hr class="step-divider" />
+
+          <!-- Step 2 -->
+          <div id="controls-step2">
+            <div class="step-label">Step 2 — Write Your Review</div>
+            <label class="field-label" for="line-num">Line Number</label>
+            <input type="number" id="line-num" min="1" max="200" value="1" aria-label="Line number" />
+
+            <label class="field-label" for="issue-type">Issue Type</label>
+            <select id="issue-type" aria-label="Issue type">
+              <option value="bug">bug</option>
+              <option value="security">security</option>
+              <option value="performance">performance</option>
+              <option value="style">style</option>
+              <option value="logic">logic</option>
+            </select>
+
+            <label class="field-label" for="severity">Severity</label>
+            <select id="severity" aria-label="Severity level">
+              <option value="critical">critical</option>
+              <option value="major">major</option>
+              <option value="minor">minor</option>
+            </select>
+
+            <label class="field-label" for="description">Description</label>
+            <textarea id="description" rows="3" placeholder="Describe the issue you found…" aria-label="Issue description"></textarea>
+
+            <label class="field-label" for="suggested-fix">Suggested Fix</label>
+            <textarea id="suggested-fix" rows="2" placeholder="Optional: how to fix it…" aria-label="Suggested fix"></textarea>
+
+            <label class="field-label" for="verdict">Verdict</label>
+            <select id="verdict" aria-label="Review verdict">
+              <option value="request_changes">request_changes</option>
+              <option value="approve">approve</option>
+              <option value="comment">comment</option>
+            </select>
+
+            <button class="btn btn-cyan btn-full" style="margin-top:16px;" onclick="submitStep()" id="submit-btn">
+              <svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+              Submit Review
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT: Output -->
+      <div style="display:flex;flex-direction:column;gap:20px;">
+        <!-- Diff viewer -->
+        <div class="panel fade-up delay-2">
+          <div class="panel-header">
+            <span class="panel-title">CODE DIFF VIEWER</span>
+            <span id="diff-filename" style="font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace;"></span>
+          </div>
+          <div class="diff-viewer" id="diff-viewer" role="region" aria-label="Code diff viewer">
+            <div class="diff-placeholder">
+              <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+              Select a task and click <strong style="color:var(--purple)">Start Review</strong> to load the code diff
+            </div>
+          </div>
+        </div>
+
+        <!-- Reward result -->
+        <div class="panel fade-up delay-3" id="reward-panel">
+          <div class="panel-header">
+            <span class="panel-title">REWARD RESULT</span>
+            <div class="status-badges" id="status-badges"></div>
+          </div>
+          <div class="reward-panel-inner">
+            <div class="reward-score-display">
+              <div class="reward-score-label">Step Reward</div>
+              <div class="reward-score-val" id="reward-val">0.00</div>
+            </div>
+            <div class="reward-breakdown" id="reward-breakdown"></div>
+            <div style="font-size:12px;color:var(--muted);margin-top:8px;" id="reward-meta"></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider" />
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<!-- HOW IT WORKS                                                          -->
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<section class="section-sm section" id="how">
+  <div class="container">
+    <div class="section-header fade-up" style="text-align:center;margin-bottom:48px;">
+      <div class="section-label">Architecture</div>
+      <h2 class="section-title">How It Works</h2>
+      <p class="section-sub" style="margin:0 auto;">Three simple steps to train an AI code reviewer.</p>
+    </div>
+    <div class="steps-row fade-up delay-1">
+      <div class="step-card">
+        <div class="step-num">01</div>
+        <h3 class="step-card-title">Reset</h3>
+        <span class="step-endpoint">POST /reset</span>
+        <p class="step-desc">Start a new episode. Pass a task ID and receive the full code diff, file name, PR title, and max steps allowed.</p>
+      </div>
+      <div class="step-arrow" aria-hidden="true">→</div>
+      <div class="step-card">
+        <div class="step-num">02</div>
+        <h3 class="step-card-title">Step</h3>
+        <span class="step-endpoint">POST /step</span>
+        <p class="step-desc">Submit your review comments and verdict. Receive a dense reward signal, done flag, and info about remaining steps.</p>
+      </div>
+      <div class="step-arrow" aria-hidden="true">→</div>
+      <div class="step-card">
+        <div class="step-num">03</div>
+        <h3 class="step-card-title">Grade</h3>
+        <span class="step-endpoint">POST /grader</span>
+        <p class="step-desc">When done, grade the full episode. Receive a deterministic score from 0.0 to 1.0 based on detected issues and verdict accuracy.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider" />
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<!-- TASKS                                                                 -->
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<section class="section" id="tasks">
+  <div class="container">
+    <div class="section-header fade-up">
+      <div class="section-label">Task Library</div>
+      <h2 class="section-title">Available Tasks</h2>
+      <p class="section-sub">From simple edge-case bugs to subtle concurrency nightmares.</p>
+    </div>
+
+    <div class="tasks-grid">
+      <!-- Easy -->
+      <div class="task-card easy fade-up delay-1" id="task-card-easy">
+        <div class="task-card-top">
+          <span class="diff-badge">EASY</span>
+        </div>
+        <h3 class="task-name">Basic Bug Detection</h3>
+        <p class="task-file">utils/statistics.py</p>
+        <p class="task-desc">Review a Python utility module. Find edge-case bugs and performance issues hidden in seemingly functional code — empty-list crashes and O(n²) lookups.</p>
+        <div class="task-tags">
+          <span class="tag">ZeroDivisionError</span>
+          <span class="tag">IndexError</span>
+          <span class="tag">O(n²) complexity</span>
+          <span class="tag">Empty list guard</span>
+        </div>
+        <div class="task-meta">
+          <span>Max 3 steps</span>
+          <span class="sep">•</span>
+          <span>4 bugs hidden</span>
+          <span class="sep">•</span>
+          <span>Score: 0.95</span>
+        </div>
+        <button class="task-try-btn" id="try-easy-btn" onclick="jumpToDemo('easy')" aria-label="Try easy task">Try this task →</button>
+      </div>
+
+      <!-- Medium -->
+      <div class="task-card medium fade-up delay-2" id="task-card-medium">
+        <div class="task-card-top">
+          <span class="diff-badge">MEDIUM</span>
+        </div>
+        <h3 class="task-name">Security Vulnerability Review</h3>
+        <p class="task-file">auth/user_manager.py</p>
+        <p class="task-desc">Analyze an authentication module riddled with security holes — SQL injection, hardcoded secrets, broken crypto, and dangerous deserialization.</p>
+        <div class="task-tags">
+          <span class="tag">SQL Injection</span>
+          <span class="tag">Hardcoded Secrets</span>
+          <span class="tag">MD5 Password Hash</span>
+          <span class="tag">pickle.loads RCE</span>
+          <span class="tag">Broken Auth</span>
+        </div>
+        <div class="task-meta">
+          <span>Max 5 steps</span>
+          <span class="sep">•</span>
+          <span>8 vulnerabilities</span>
+          <span class="sep">•</span>
+          <span>Score: 0.90</span>
+        </div>
+        <button class="task-try-btn" id="try-medium-btn" onclick="jumpToDemo('medium')" aria-label="Try medium task">Try this task →</button>
+      </div>
+
+      <!-- Hard -->
+      <div class="task-card hard fade-up delay-3" id="task-card-hard">
+        <div class="task-card-top">
+          <span class="diff-badge">HARD</span>
+        </div>
+        <h3 class="task-name">Concurrency &amp; Architecture Bug Hunt</h3>
+        <p class="task-file">core/rate_limiter.py</p>
+        <p class="task-desc">Hunt subtle race conditions, silent exception swallowing, mutating-while-iterating crashes, and architectural flaws in a distributed rate limiter.</p>
+        <div class="task-tags">
+          <span class="tag">Race Conditions</span>
+          <span class="tag">Thread Safety</span>
+          <span class="tag">Silent Exceptions</span>
+          <span class="tag">Dict Mutation</span>
+          <span class="tag">deque vs list</span>
+        </div>
+        <div class="task-meta">
+          <span>Max 8 steps</span>
+          <span class="sep">•</span>
+          <span>8 subtle bugs</span>
+          <span class="sep">•</span>
+          <span>Score: 0.29</span>
+        </div>
+        <button class="task-try-btn" id="try-hard-btn" onclick="jumpToDemo('hard')" aria-label="Try hard task">Try this task →</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider" />
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<!-- API REFERENCE                                                         -->
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<section class="section" id="api">
+  <div class="container">
+    <div class="section-header fade-up">
+      <div class="section-label">Developer Reference</div>
+      <h2 class="section-title">API Reference</h2>
+      <p class="section-sub">All endpoints available at <code style="color:var(--cyan);font-size:13px;">http://localhost:7860</code></p>
+    </div>
+
+    <div class="api-table-wrap fade-up delay-1">
+      <table class="api-table" aria-label="API endpoints reference table">
+        <thead>
+          <tr>
+            <th>Method</th>
+            <th>Endpoint</th>
+            <th>Description</th>
+            <th>Copy cURL</th>
+          </tr>
+        </thead>
+        <tbody id="api-tbody">
+          <!-- Populated by JS -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<hr class="divider" />
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<!-- FOOTER                                                                -->
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<footer>
+  <div class="container">
+    <div class="footer-inner">
+      <div class="footer-left">
+        <strong>CodeReviewEnv</strong> © 2025<br/>
+        Built for Meta × Hugging Face OpenEnv Hackathon
+      </div>
+      <div class="footer-right">
+        <a href="https://github.com/Lucifer-cyber007/meta-hackathon-open-env" target="_blank" rel="noopener" class="footer-icon-btn" aria-label="GitHub repository">
+          <svg viewBox="0 0 24 24"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+        </a>
+        <a href="https://huggingface.co/spaces/lucifer0077/code-review-env" target="_blank" rel="noopener" class="footer-icon-btn" aria-label="HuggingFace space" style="font-size:16px;text-decoration:none;color:var(--muted);">🤗</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<!-- JAVASCRIPT                                                            -->
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<script>
+// ── Config ──────────────────────────────────────────────────────────────
+const API = 'http://localhost:7860';
+
+// ── Toast ────────────────────────────────────────────────────────────────
+function showToast(msg, type = 'info', duration = 4000) {
+  const icons = { success: '✅', error: '❌', info: 'ℹ️' };
+  const container = document.getElementById('toast-container');
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  toast.innerHTML = `
+    <span class="toast-icon">${icons[type]}</span>
+    <span class="toast-msg">${msg}</span>
+    <button class="toast-close" onclick="removeToast(this.parentElement)" aria-label="Dismiss">×</button>
+  `;
+  container.appendChild(toast);
+  setTimeout(() => removeToast(toast), duration);
+}
+function removeToast(el) {
+  if (!el || !el.parentElement) return;
+  el.classList.add('removing');
+  setTimeout(() => el.remove(), 350);
+}
+
+// ── Mobile menu ──────────────────────────────────────────────────────────
+const hamburger = document.getElementById('hamburger');
+const mobileMenu = document.getElementById('mobile-menu');
+hamburger.addEventListener('click', () => {
+  const open = mobileMenu.classList.toggle('open');
+  hamburger.setAttribute('aria-expanded', open);
+});
+function closeMenu() { mobileMenu.classList.remove('open'); hamburger.setAttribute('aria-expanded', false); }
+
+// ── Health check ─────────────────────────────────────────────────────────
+const liveDot  = document.getElementById('live-dot');
+const liveText = document.getElementById('live-text');
+async function checkHealth() {
+  try {
+    const r = await fetch(`${API}/`, { signal: AbortSignal.timeout(4000) });
+    if (r.ok) {
+      liveDot.classList.remove('offline');
+      liveText.textContent = 'Live';
+    } else throw new Error();
+  } catch {
+    liveDot.classList.add('offline');
+    liveText.textContent = 'Offline';
+  }
+}
+checkHealth();
+setInterval(checkHealth, 12000);
+
+// ── Score count-up animation ─────────────────────────────────────────────
+function animateCountUp(el, target, duration = 1500, decimals = 2) {
+  const start = performance.now();
+  function step(now) {
+    const t = Math.min((now - start) / duration, 1);
+    const ease = 1 - Math.pow(1 - t, 3);
+    const val = (target * ease);
+    el.textContent = val.toFixed(decimals);
+    if (t < 1) requestAnimationFrame(step);
+    else el.textContent = target.toFixed(decimals);
+  }
+  requestAnimationFrame(step);
+}
+
+// ── Intersection observer for score cards ────────────────────────────────
+const scoreData = [
+  { elId: 'num-easy',   barId: 'bar-easy',   val: 0.95, pct: 95  },
+  { elId: 'num-medium', barId: 'bar-medium',  val: 0.90, pct: 90  },
+  { elId: 'num-hard',   barId: 'bar-hard',    val: 0.29, pct: 29  },
+];
+const revealedScores = new Set();
+const scoreObs = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    if (e.isIntersecting && !revealedScores.has(e.target.id)) {
+      revealedScores.add(e.target.id);
+      const idx = ['score-easy','score-medium','score-hard'].indexOf(e.target.id);
+      if (idx >= 0) {
+        const d = scoreData[idx];
+        const numEl = document.getElementById(d.elId);
+        const barEl = document.getElementById(d.barId);
+        setTimeout(() => {
+          animateCountUp(numEl, d.val, 1400);
+          barEl.style.width = d.pct + '%';
+        }, idx * 120);
+      }
+    }
+  });
+}, { threshold: 0.2 });
+
+['score-easy','score-medium','score-hard'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) scoreObs.observe(el);
+});
+
+// ── Diff renderer ────────────────────────────────────────────────────────
+function renderDiff(diffText, filename) {
+  const viewer = document.getElementById('diff-viewer');
+  const filenameEl = document.getElementById('diff-filename');
+  if (filenameEl) filenameEl.textContent = filename || '';
+
+  if (!diffText) {
+    viewer.innerHTML = '<div class="diff-placeholder"><svg viewBox="0 0 24 24" style="width:40px;height:40px;stroke:var(--border2);fill:none;stroke-width:1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>No diff available</div>';
+    return;
+  }
+
+  const lines = diffText.split('\n');
+  let lineNum = 0;
+  const html = lines.map(line => {
+    let cls = '';
+    let display = line;
+    if (line.startsWith('+++') || line.startsWith('---')) {
+      cls = 'header';
+    } else if (line.startsWith('@@')) {
+      cls = 'header';
+      // Parse hunk header for line numbers
+      const m = line.match(/\+(\d+)/);
+      if (m) lineNum = parseInt(m[1]) - 1;
+    } else if (line.startsWith('+')) {
+      cls = 'add'; lineNum++;
+    } else if (line.startsWith('-')) {
+      cls = 'remove';
+    } else {
+      lineNum++;
+    }
+    const numDisplay = (cls === 'header' || !lineNum) ? '' : lineNum;
+    const escaped = line.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    return `<div class="diff-line ${cls}"><span class="line-num">${numDisplay}</span><span class="line-content">${escaped}</span></div>`;
+  }).join('');
+
+  viewer.innerHTML = html;
+}
+
+// ── Live Demo ────────────────────────────────────────────────────────────
+let currentDiff = '';
+let currentFile = '';
+
+async function startReview() {
+  const taskId = document.getElementById('task-select').value;
+  const btn = document.getElementById('start-btn');
+  btn.classList.add('loading');
+  btn.innerHTML = '<span class="spinner"></span> Loading…';
+
+  try {
+    const res = await fetch(`${API}/reset`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ task_id: taskId }),
+    });
+    if (!res.ok) throw new Error(`Server error: ${res.status}`);
+    const data = await res.json();
+
+    currentDiff = data.diff || '';
+    currentFile = data.file_name || '';
+    renderDiff(currentDiff, currentFile);
+
+    document.getElementById('controls-step2').classList.add('visible');
+    document.getElementById('reward-panel').classList.remove('visible');
+
+    showToast(`✅ Task loaded: ${data.pr_title || taskId}`, 'success');
+  } catch (err) {
+    showToast(`Failed to connect to server. Is it running at ${API}?`, 'error', 6000);
+    console.error(err);
+  } finally {
+    btn.classList.remove('loading');
+    btn.innerHTML = '<svg viewBox="0 0 24 24" style="width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2"><polygon points="5 3 19 12 5 21 5 3"/></svg> Start Review';
+  }
+}
+
+async function submitStep() {
+  const desc = document.getElementById('description').value.trim();
+  if (!desc) { showToast('Please enter an issue description.', 'error'); return; }
+
+  const btn = document.getElementById('submit-btn');
+  btn.classList.add('loading');
+  btn.innerHTML = '<span class="spinner"></span> Submitting…';
+
+  const action = {
+    comments: [{
+      line_number: parseInt(document.getElementById('line-num').value) || 1,
+      issue_type:  document.getElementById('issue-type').value,
+      severity:    document.getElementById('severity').value,
+      description: desc,
+      suggested_fix: document.getElementById('suggested-fix').value.trim(),
+    }],
+    verdict: document.getElementById('verdict').value,
+  };
+
+  try {
+    const res = await fetch(`${API}/step`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(action),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `Server error ${res.status}`);
+    }
+    const data = await res.json();
+    showReward(data);
+    showToast(data.done ? '🏁 Episode complete!' : '📊 Step submitted!', data.done ? 'success' : 'info');
+  } catch (err) {
+    showToast(err.message || 'Failed to submit step.', 'error', 6000);
+    console.error(err);
+  } finally {
+    btn.classList.remove('loading');
+    btn.innerHTML = '<svg viewBox="0 0 24 24" style="width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg> Submit Review';
+  }
+}
+
+function showReward(data) {
+  const panel = document.getElementById('reward-panel');
+  panel.classList.add('visible');
+
+  const reward = data.reward ?? 0;
+  const valEl  = document.getElementById('reward-val');
+  valEl.className = 'reward-score-val ' + (reward >= 0 ? 'positive' : 'negative');
+
+  // Animate reward number
+  const start = performance.now();
+  const dur = 900;
+  (function step(now) {
+    const t = Math.min((now - start) / dur, 1);
+    const ease = 1 - Math.pow(1 - t, 3);
+    valEl.textContent = (reward * ease).toFixed(2);
+    if (t < 1) requestAnimationFrame(step);
+    else valEl.textContent = reward.toFixed(2);
+  })(start);
+
+  // Breakdown
+  const info = data.info || {};
+  const bd = document.getElementById('reward-breakdown');
+  const rows = [
+    ['Issue detection',     info.issue_detection_score   != null ? `+${info.issue_detection_score.toFixed(2)}` : '—', 'pos'],
+    ['False pos penalty',   info.false_positive_penalty  != null ? `-${Math.abs(info.false_positive_penalty).toFixed(2)}` : '—', 'neg'],
+    ['Correct verdict',     info.verdict_score           != null ? `+${info.verdict_score.toFixed(2)}` : '—', 'pos'],
+    ['Step penalty',        info.step_penalty            != null ? `-${Math.abs(info.step_penalty).toFixed(2)}` : '—', 'neg'],
+  ];
+  bd.innerHTML = rows.map(([k,v,cls]) =>
+    `<div class="reward-row"><span class="rk">${k}</span><span class="rv ${cls}">${v}</span></div>`
+  ).join('');
+
+  // Status badges
+  const sBadges = document.getElementById('status-badges');
+  const badges = [];
+  if (data.done) badges.push('<span class="status-badge badge-done">DONE</span>');
+  else           badges.push('<span class="status-badge badge-progress">IN PROGRESS</span>');
+  if (info.issues_found != null && info.total_issues != null)
+    badges.push(`<span class="status-badge badge-step">Issues: ${info.issues_found}/${info.total_issues}</span>`);
+  if (info.steps_remaining != null)
+    badges.push(`<span class="status-badge badge-step">Steps left: ${info.steps_remaining}</span>`);
+  sBadges.innerHTML = badges.join('');
+
+  // meta
+  const meta = document.getElementById('reward-meta');
+  if (info.issues_found != null)
+    meta.textContent = `Issues found: ${info.issues_found}/${info.total_issues || '?'} • Steps remaining: ${info.steps_remaining ?? '?'}`;
+}
+
+// ── Jump to demo with task pre-selected ──────────────────────────────────
+function jumpToDemo(taskId) {
+  document.getElementById('task-select').value = taskId;
+  document.getElementById('demo').scrollIntoView({ behavior: 'smooth' });
+  setTimeout(() => showToast(`Task set to: ${taskId}`, 'info', 2500), 400);
+}
+
+// ── API Table ────────────────────────────────────────────────────────────
+const API_ROWS = [
+  {
+    method: 'GET', endpoint: '/', desc: 'Health check — server status and version',
+    curl: `curl http://localhost:7860/`
+  },
+  {
+    method: 'POST', endpoint: '/reset', desc: 'Reset environment — start new episode with chosen task',
+    curl: `curl -X POST http://localhost:7860/reset \\\n  -H "Content-Type: application/json" \\\n  -d '{"task_id":"easy"}'`
+  },
+  {
+    method: 'POST', endpoint: '/step', desc: 'Submit review action — get reward signal',
+    curl: `curl -X POST http://localhost:7860/step \\\n  -H "Content-Type: application/json" \\\n  -d '{"comments":[{"line_number":5,"issue_type":"bug","severity":"critical","description":"ZeroDivision error when list is empty"}],"verdict":"request_changes"}'`
+  },
+  {
+    method: 'GET', endpoint: '/state', desc: 'Get current environment state and progress',
+    curl: `curl http://localhost:7860/state`
+  },
+  {
+    method: 'GET', endpoint: '/tasks', desc: 'List all tasks with schemas and metadata',
+    curl: `curl http://localhost:7860/tasks`
+  },
+  {
+    method: 'POST', endpoint: '/grader', desc: 'Score a completed episode — returns 0.0–1.0',
+    curl: `curl -X POST http://localhost:7860/grader \\\n  -H "Content-Type: application/json" \\\n  -d '{"task_id":"easy","episode_history":[]}'`
+  },
+  {
+    method: 'POST', endpoint: '/baseline', desc: 'Run baseline inference with Gemini 2.0 Flash',
+    curl: `curl -X POST http://localhost:7860/baseline`
+  },
+];
+
+const tbody = document.getElementById('api-tbody');
+API_ROWS.forEach(row => {
+  const tr = document.createElement('tr');
+  const badgeCls = row.method === 'GET' ? 'method-get' : 'method-post';
+  tr.innerHTML = `
+    <td><span class="method-badge ${badgeCls}">${row.method}</span></td>
+    <td class="endpoint-cell">${row.endpoint}</td>
+    <td class="desc-cell">${row.desc}</td>
+    <td><button class="copy-btn" data-curl="${encodeURIComponent(row.curl)}" onclick="copyCurl(this)">Copy</button></td>
+  `;
+  tbody.appendChild(tr);
+});
+
+function copyCurl(btn) {
+  const curl = decodeURIComponent(btn.dataset.curl);
+  navigator.clipboard.writeText(curl).then(() => {
+    btn.textContent = 'Copied!';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+  }).catch(() => showToast('Copy failed — try manually', 'error'));
+}
+
+// ── Fade-up on scroll ────────────────────────────────────────────────────
+const fadeObs = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      e.target.style.animationPlayState = 'running';
+      fadeObs.unobserve(e.target);
+    }
+  });
+}, { threshold: 0.08 });
+
+document.querySelectorAll('.fade-up').forEach(el => {
+  el.style.animationPlayState = 'paused';
+  fadeObs.observe(el);
+});
+
+// ── Boot ─────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  // Highlight.js init (for any inline code blocks)
+  if (window.hljs) hljs.highlightAll();
+});
+</script>
+</body>
+</html>

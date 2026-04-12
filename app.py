@@ -12,8 +12,10 @@ Endpoints:
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from typing import Any, Dict, Optional
+import os
 
 from models import (
     Action,
@@ -231,6 +233,16 @@ def baseline():
         raise HTTPException(status_code=504, detail="Baseline script timed out")
     except json.JSONDecodeError as e:
         raise HTTPException(status_code=500, detail=f"Failed to parse baseline output: {e}")
+
+
+# ── Dashboard UI ─────────────────────────────────────────────────────────
+
+@app.get("/dashboard", response_class=HTMLResponse, tags=["UI"])
+def dashboard():
+    """Serve the web dashboard UI"""
+    html_path = os.path.join(os.path.dirname(__file__), "dashboard.html")
+    with open(html_path, "r", encoding="utf-8") as f:
+        return f.read()
 
 
 # ── Entry point ───────────────────────────────────────────────────────────
