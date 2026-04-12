@@ -210,55 +210,43 @@ def grader(grader_input: GraderInput):
 # FIX 3: runs inference explicitly in-process to capture AI findings
 @app.post("/baseline", tags=["OpenEnv"])
 def baseline(request: Optional[BaselineRequest] = None):
-    """
-    Trigger the baseline inference script.
-    Runs the agent against all 3 tasks (or a specific task) and returns reproducible scores.
-    """
     import inference
     from openai import OpenAI
-    
-    task_ids = [request.task_id] if request and request.task_id else ["easy", "medium", "hard"]
-    
-    # Monkey-patch to capture the LLM comments parsed by inference.py
-    captured_actions = {}
+
+    task_id = request.task_id if request and request.task_id else "easy"
+
+    client = OpenAI(
+        api_key=inference._api_key,
+        base_url=inference.API_BASE_URL,
+    )
+
+    # Run single task and capture action
+    captured = {}
     original_parse = inference.parse_llm_response
-    
+
     def hooked_parse(content):
         action = original_parse(content)
-        captured_actions['last'] = action
+        captured['action'] = action
         return action
-        
+
     inference.parse_llm_response = hooked_parse
-    
+
     try:
-        client = OpenAI(
-            api_key=inference._api_key,
-            base_url=inference.API_BASE_URL,
-        )
-        
-        scores = []
-        for t in task_ids:
-            # We must pass verbose=False to mimic --output-json behavior
-            res = inference.run_task(client, t, inference.MODEL_NAME, verbose=False)
-            scores.append(res)
-            
-        ai_findings = []
-        verdict = "comment"
-        
-        if 'last' in captured_actions:
-            action = captured_actions['last']
-            ai_findings = [c.model_dump() for c in action.comments]
-            verdict = action.verdict
-            
+        res = inference.run_task(client, task_id, inference.MODEL_NAME, verbose=False)
+
+        action = captured.get('action')
+        ai_findings = [c.model_dump() for c in action.comments] if action else []
+        verdict = action.verdict if action else "comment"
+
         return {
-            "scores": scores,
+            "scores": [res],
             "model_used": inference.MODEL_NAME,
-            "note": "Temperature=0. Uses API_BASE_URL + HF_TOKEN from environment.",
+            "note": "Temperature=0.",
             "ai_findings": ai_findings,
             "verdict": verdict
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to parse baseline output: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
     finally:
         inference.parse_llm_response = original_parse
 
