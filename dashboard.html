@@ -962,6 +962,10 @@
             Start Review
           </button>
 
+          <button class="btn btn-cyan btn-full" id="ai-review-btn" onclick="runAIReview()" style="margin-top:12px;">
+            🤖 Run AI Review
+          </button>
+
           <hr class="step-divider" />
 
           <!-- Step 2 -->
@@ -1031,7 +1035,7 @@
           </div>
           <div class="reward-panel-inner">
             <div class="reward-score-display">
-              <div class="reward-score-label">Step Reward</div>
+              <div class="reward-score-label">AI Review Score</div>
               <div class="reward-score-val" id="reward-val">0.00</div>
             </div>
             <div class="reward-breakdown" id="reward-breakdown"></div>
@@ -1485,6 +1489,63 @@ function showReward(data) {
   const meta = document.getElementById('reward-meta');
   if (info.issues_found != null)
     meta.textContent = `Issues found: ${info.issues_found}/${info.total_issues || '?'} • Steps remaining: ${info.steps_remaining ?? '?'}`;
+}
+
+// ── AI Auto-Review ───────────────────────────────────────────────────────
+async function runAIReview() {
+  const taskId = document.getElementById('task-select').value;
+  const btn = document.getElementById('ai-review-btn');
+  btn.innerHTML = '<span class="spinner"></span> AI Reviewing...';
+  btn.disabled = true;
+
+  try {
+    const res = await fetch(`${API}/baseline`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ task_id: taskId }),
+    });
+    const data = await res.json();
+
+    // Find this task's score
+    const taskResult = data.scores.find(s => s.task_id === taskId) || data.scores[0];
+
+    // Show AI findings
+    showAIFindings(data.ai_findings || [], taskResult.score, data.verdict || 'comment');
+
+  } catch(err) {
+    showToast('AI Review failed: ' + err.message, 'error');
+  } finally {
+    btn.innerHTML = '🤖 Run AI Review';
+    btn.disabled = false;
+  }
+}
+
+function showAIFindings(findings, score, verdict) {
+  // Show score
+  const panel = document.getElementById('reward-panel');
+  panel.classList.add('visible');
+  const valEl = document.getElementById('reward-val');
+  valEl.className = 'reward-score-val ' + (score >= 0.5 ? 'positive' : 'negative');
+  valEl.textContent = score.toFixed(2);
+
+  // Show findings list
+  const bd = document.getElementById('reward-breakdown');
+  if (findings.length === 0) {
+    bd.innerHTML = '<div class="reward-row"><span class="rk">No issues detected by AI</span></div>';
+  } else {
+    bd.innerHTML = findings.map(f =>
+      `<div class="reward-row">
+        <span class="rk">Line ${f.line_number} — ${f.issue_type} (${f.severity})</span>
+        <span class="rv pos">${f.description}</span>
+      </div>`
+    ).join('');
+  }
+
+  // Show verdict
+  const sBadges = document.getElementById('status-badges');
+  sBadges.innerHTML = `<span class="status-badge badge-done">AI Verdict: ${verdict.toUpperCase()}</span>`;
+
+  showToast(`AI Review complete! Score: ${score.toFixed(2)}`, 'success');
 }
 
 // ── Jump to demo with task pre-selected ──────────────────────────────────
