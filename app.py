@@ -28,6 +28,7 @@ from models import (
 from environment import CodeReviewEnv
 from graders import grade_episode
 from tasks import get_all_tasks
+from free_review import review_free_code
 
 # ── App setup ─────────────────────────────────────────────────────────────
 app = FastAPI(
@@ -249,6 +250,67 @@ def baseline(request: Optional[BaselineRequest] = None):
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         inference.parse_llm_response = original_parse
+
+
+# ── Free Review Route ───────────────────────────────────────────────────
+
+class FreeReviewRequest(BaseModel):
+    code: str
+    language: Optional[str] = "python"
+    context: Optional[str] = ""
+
+class FreeReviewResponse(BaseModel):
+    issues: list
+    overall_verdict: str
+    summary: str
+    positive_aspects: list
+    total_issues: int
+    critical_count: int
+    major_count: int
+    minor_count: int
+    error: Optional[str] = None
+
+@app.post("/review/free", tags=["Free Review"])
+def free_review(request: FreeReviewRequest):
+    """
+    Review any arbitrary code using AI.
+    No grading — works on any code, any language.
+    Perfect for ad-hoc reviews and demos.
+    """
+    result = review_free_code(
+        code=request.code,
+        language=request.language,
+        context=request.context
+    )
+    
+    if "error" in result:
+        return FreeReviewResponse(
+            issues=[],
+            overall_verdict="error",
+            summary=result["error"],
+            positive_aspects=[],
+            total_issues=0,
+            critical_count=0,
+            major_count=0,
+            minor_count=0,
+            error=result["error"]
+        )
+    
+    issues = result.get("issues", [])
+    return FreeReviewResponse(
+        issues=issues,
+        overall_verdict=result.get("overall_verdict", "comment"),
+        summary=result.get("summary", ""),
+        positive_aspects=result.get("positive_aspects", []),
+        total_issues=len(issues),
+        critical_count=sum(1 for i in issues 
+                          if i.get("severity") == "critical"),
+        major_count=sum(1 for i in issues 
+                       if i.get("severity") == "major"),
+        minor_count=sum(1 for i in issues 
+                       if i.get("severity") == "minor"),
+        error=None
+    )
 
 
 # ── Debug Route ─────────────────────────────────────────────────────────
