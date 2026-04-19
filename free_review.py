@@ -6,7 +6,7 @@ import inference
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
-DEFAULT_MODEL = os.environ.get("FREE_REVIEW_MODEL", "gemini-1.5-flash")
+DEFAULT_MODEL = os.environ.get("FREE_REVIEW_MODEL", "gemini-2.0-flash")
 
 SYSTEM_PROMPT = """You are an expert code reviewer with 15+ years 
 of experience. Review the provided code and identify ALL issues.
