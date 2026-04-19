@@ -6,8 +6,7 @@ import inference
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
-DEFAULT_MODEL = "gemini-2.0-flash" 
-# use whatever model name is working in inference.py currently
+DEFAULT_MODEL = os.environ.get("FREE_REVIEW_MODEL", "gemini-1.5-flash")
 
 SYSTEM_PROMPT = """You are an expert code reviewer with 15+ years 
 of experience. Review the provided code and identify ALL issues.
@@ -85,7 +84,12 @@ Review this code thoroughly and return JSON only."""
                 content = content.strip()[:-3].strip()
         return json.loads(content)
     except json.JSONDecodeError:
-        return {"error": "Failed to parse AI response", 
+        return {"error": "Failed to parse AI response",
                 "raw": content[:500]}
     except Exception as e:
-        return {"error": str(e)}
+        err_str = str(e)
+        if "429" in err_str or "quota" in err_str.lower() or "RESOURCE_EXHAUSTED" in err_str:
+            return {"error": "API rate limit reached (429). Your Gemini free-tier quota is exhausted. "
+                             "Wait a minute and try again, or get a new API key at "
+                             "https://aistudio.google.com/app/apikey"}
+        return {"error": err_str}
