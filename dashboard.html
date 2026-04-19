@@ -3088,6 +3088,121 @@
       }).catch(() => showToast('Copy failed — try manually', 'error'));
     }
 
+    // ── Free Code Review ─────────────────────────────────────────────────────
+    async function runFreeReview() {
+      const code = document.getElementById('free-code-input').value.trim();
+      const language = document.getElementById('free-language').value;
+      const context = document.getElementById('free-context').value.trim();
+
+      if (!code) {
+        showToast('Please paste some code first!', 'error');
+        return;
+      }
+
+      // Show loading, hide others
+      document.getElementById('free-empty').style.display = 'none';
+      document.getElementById('free-results').style.display = 'none';
+      document.getElementById('free-loading').style.display = 'flex';
+
+      const btn = document.getElementById('run-free-btn');
+      btn.disabled = true;
+      btn.style.opacity = '0.6';
+
+      try {
+        const res = await fetch('/review/free', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code, language, context })
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ detail: 'Server error' }));
+          throw new Error(err.detail || 'Request failed');
+        }
+
+        const data = await res.json();
+
+        // Verdict badge
+        const verdictEl = document.getElementById('free-verdict');
+        verdictEl.textContent = (data.overall_verdict || 'comment').toUpperCase();
+        verdictEl.className = 'verdict-badge verdict-' + (data.overall_verdict || 'comment');
+
+        // Issue count
+        document.getElementById('free-issue-count').textContent =
+          (data.total_issues || 0) + ' issue' + (data.total_issues !== 1 ? 's' : '') + ' found';
+
+        // Severity counts
+        document.getElementById('sc-c').textContent = data.critical_count || 0;
+        document.getElementById('sc-m').textContent = data.major_count || 0;
+        document.getElementById('sc-mi').textContent = data.minor_count || 0;
+
+        // Summary
+        const summaryEl = document.getElementById('free-summary');
+        summaryEl.textContent = data.summary || '';
+        summaryEl.style.display = data.summary ? 'block' : 'none';
+
+        // Positive aspects
+        const posUl = document.getElementById('free-pos-ul');
+        const posList = document.getElementById('free-positives');
+        posUl.innerHTML = '';
+        if (data.positive_aspects && data.positive_aspects.length > 0) {
+          data.positive_aspects.forEach(p => {
+            const li = document.createElement('li');
+            li.textContent = p;
+            posUl.appendChild(li);
+          });
+          posList.style.display = 'block';
+        } else {
+          posList.style.display = 'none';
+        }
+
+        // Issues list
+        const issuesEl = document.getElementById('free-issues');
+        issuesEl.innerHTML = '';
+        const sevColors = { critical: 'var(--red)', major: 'var(--amber)', minor: 'var(--muted)' };
+        const sevIcons  = { critical: '🔴', major: '🟡', minor: '⚪' };
+        if (data.issues && data.issues.length > 0) {
+          data.issues.forEach(issue => {
+            const sev = (issue.severity || 'minor').toLowerCase();
+            const card = document.createElement('div');
+            card.className = 'issue-card';
+            card.style.cssText = 'background:var(--surface);border:1px solid var(--border);border-left:3px solid '
+              + (sevColors[sev] || 'var(--muted)') + ';border-radius:var(--radius-sm);padding:14px 16px;margin-bottom:10px;';
+            card.innerHTML =
+              '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">' +
+                '<span style="font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:'+ (sevColors[sev]||'var(--muted)') + ';">' +
+                  (sevIcons[sev]||'') + ' ' + sev + ' &bull; ' + (issue.issue_type || '') +
+                '</span>' +
+                '<span style="font-size:11px;color:var(--muted);">Line ' + (issue.line_number || '?') + '</span>' +
+              '</div>' +
+              '<div style="font-size:13px;color:var(--text);margin-bottom:' + (issue.suggested_fix ? '8px' : '0') + ';">' +
+                (issue.description || '') +
+              '</div>' +
+              (issue.suggested_fix
+                ? '<div style="font-size:12px;color:var(--cyan);background:rgba(6,182,212,.07);border-radius:6px;padding:8px 12px;margin-top:6px;">' +
+                    '💡 ' + issue.suggested_fix + '</div>'
+                : '');
+            issuesEl.appendChild(card);
+          });
+        } else {
+          issuesEl.innerHTML = '<div style="color:var(--green);font-size:14px;text-align:center;padding:16px;">No issues found — looks clean!</div>';
+        }
+
+        // Show results
+        document.getElementById('free-loading').style.display = 'none';
+        document.getElementById('free-results').style.display = 'block';
+        showToast('Review complete!', 'success');
+
+      } catch (err) {
+        document.getElementById('free-loading').style.display = 'none';
+        document.getElementById('free-empty').style.display = 'flex';
+        showToast('Review failed: ' + err.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.style.opacity = '1';
+      }
+    }
+
     // ── Fade-up on scroll ────────────────────────────────────────────────────
     const fadeObs = new IntersectionObserver((entries) => {
       entries.forEach(e => {
