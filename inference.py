@@ -29,7 +29,7 @@ HF_TOKEN     = os.getenv("HF_TOKEN")
 LOCAL_IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME")
 
 # Use HF_TOKEN if provided by validator, else fall back to GEMINI_API_KEY
-_api_key = HF_TOKEN or os.getenv("GEMINI_API_KEY", "AIzaSyD4ZdqU7eAlnUXD_TNpTa0UiEvTSqghhCU")
+_api_key = HF_TOKEN or os.getenv("GEMINI_API_KEY", "AIzaSyA92Np6UCnjIDhyKr-xFWcPDgWwcZ9Q63M")
 
 
 SYSTEM_PROMPT = """You are an expert code reviewer. You will be given a code diff from a pull request.
