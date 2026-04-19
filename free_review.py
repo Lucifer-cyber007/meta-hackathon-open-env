@@ -1,12 +1,11 @@
 from openai import OpenAI
 import os
 import json
+import time
+from dotenv import load_dotenv
+load_dotenv()
 
 import inference
-
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
-DEFAULT_MODEL = os.environ.get("FREE_REVIEW_MODEL", "gemini-2.0-flash")
 
 SYSTEM_PROMPT = """You are an expert code reviewer with 15+ years 
 of experience. Review the provided code and identify ALL issues.
@@ -38,23 +37,43 @@ Respond ONLY with valid JSON, no markdown:
   "summary": "<summary>",
   "positive_aspects": ["<aspect1>", "<aspect2>"]
 }"""
-
 def review_free_code(code: str, language: str = "python", 
                      context: str = "") -> dict:
     """
-    Review any arbitrary code using Gemini.
+    Review any arbitrary code using Groq or Gemini.
     Returns structured findings without a grader score.
     """
-    api_key_to_use = GEMINI_API_KEY if GEMINI_API_KEY else inference._api_key
-    base_url_to_use = GEMINI_BASE_URL if GEMINI_API_KEY else inference.API_BASE_URL
+    providers = []
+    
+    # 1. Primary: Groq
+    if os.environ.get("GROQ_API_KEY"):
+        providers.append({
+            "name": "Groq",
+            "api_key": os.environ.get("GROQ_API_KEY"),
+            "base_url": "https://api.groq.com/openai/v1",
+            "model": "llama-3.3-70b-versatile"
+        })
+        
+    # 2. Fallback: Gemini
+    if os.environ.get("GEMINI_API_KEY"):
+        providers.append({
+            "name": "Gemini",
+            "api_key": os.environ.get("GEMINI_API_KEY"),
+            "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
+            "model": "gemini-2.0-flash"
+        })
+        
+    # 3. Last Resort: Inference Proxy / Hackathon Default
+    if not providers and hasattr(inference, '_api_key') and inference._api_key:
+        providers.append({
+            "name": "Fallback Proxy",
+            "api_key": inference._api_key,
+            "base_url": inference.API_BASE_URL,
+            "model": inference.MODEL_NAME
+        })
 
-    if not api_key_to_use:
-        return {"error": "GEMINI_API_KEY not set and inference proxy key unavailable"}
-
-    client = OpenAI(
-        api_key=api_key_to_use,
-        base_url=base_url_to_use
-    )
+    if not providers:
+        return {"error": "API keys not set. Please add GROQ_API_KEY or GEMINI_API_KEY to your .env file."}
 
     user_prompt = f"""Language: {language}
 Context: {context if context else "General code review"}
@@ -66,30 +85,45 @@ Code to review:
 
 Review this code thoroughly and return JSON only."""
 
-    try:
-        response = client.chat.completions.create(
-            model=DEFAULT_MODEL,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_prompt}
-            ],
-            temperature=0.1,
-            max_tokens=3000,
-        )
-        content = response.choices[0].message.content.strip()
-        if content.startswith("```"):
-            lines = content.split("\n")
-            content = "\n".join(lines[1:])
-            if content.strip().endswith("```"):
-                content = content.strip()[:-3].strip()
-        return json.loads(content)
-    except json.JSONDecodeError:
-        return {"error": "Failed to parse AI response",
-                "raw": content[:500]}
-    except Exception as e:
-        err_str = str(e)
-        if "429" in err_str or "quota" in err_str.lower() or "RESOURCE_EXHAUSTED" in err_str:
-            return {"error": "API rate limit reached (429). Your Gemini free-tier quota is exhausted. "
-                             "Wait a minute and try again, or get a new API key at "
-                             "https://aistudio.google.com/app/apikey"}
-        return {"error": err_str}
+    last_error = ""
+
+    for provider in providers:
+        client = OpenAI(api_key=provider["api_key"], base_url=provider["base_url"])
+        print(f"Attempting review with {provider['name']} ({provider['model']})...")
+        
+        provider_attempts = 3
+        for attempt in range(provider_attempts):
+            try:
+                response = client.chat.completions.create(
+                    model=provider["model"],
+                    messages=[
+                        {"role": "system", "content": SYSTEM_PROMPT},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    temperature=0.1,
+                    max_tokens=3000,
+                )
+                content = response.choices[0].message.content.strip()
+                if content.startswith("```"):
+                    lines = content.split("\n")
+                    content = "\n".join(lines[1:])
+                    if content.strip().endswith("```"):
+                        content = content.strip()[:-3].strip()
+                return json.loads(content)
+            except json.JSONDecodeError:
+                return {"error": f"Failed to parse JSON from {provider['name']} model",
+                        "raw": content[:500]}
+            except Exception as e:
+                err_str = str(e)
+                last_error = err_str
+                # For Groq or Gemini 429 errors
+                if "429" in err_str or "quota" in err_str.lower() or "RESOURCE_EXHAUSTED" in err_str:
+                    if attempt < provider_attempts - 1:
+                        wait_time = 10 * (attempt + 1)
+                        print(f"[{provider['name']}] Rate limit hit. Waiting {wait_time}s before retry ({attempt+1}/{provider_attempts})...")
+                        time.sleep(wait_time)
+                        continue
+                print(f"[{provider['name']}] Request failed. Falling back to next provider if available.")
+                break # Exit retry loop and move to next provider
+                
+    return {"error": f"All fallback APIs failed. Last error: {last_error}"}

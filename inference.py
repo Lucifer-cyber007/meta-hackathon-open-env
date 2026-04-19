@@ -15,6 +15,8 @@ import sys
 import json
 import argparse
 from typing import Dict, Any
+from dotenv import load_dotenv
+load_dotenv()
 
 from openai import OpenAI
 from environment import CodeReviewEnv
@@ -23,14 +25,13 @@ from models import Action, CodeComment, GraderInput
 
 
 # ── Exactly as required by the Pre-Submission Checklist ──────────────────
-API_BASE_URL = os.getenv("API_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/")
-MODEL_NAME   = os.getenv("MODEL_NAME", "gemini-2.0-flash")
+API_BASE_URL = os.getenv("API_BASE_URL", "https://api.groq.com/openai/v1")
+MODEL_NAME   = os.getenv("MODEL_NAME", "llama-3.3-70b-versatile")
 HF_TOKEN     = os.getenv("HF_TOKEN")
 LOCAL_IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME")
 
 # Use HF_TOKEN if provided by validator, else fall back to GEMINI_API_KEY
-_api_key = HF_TOKEN or os.getenv("GEMINI_API_KEY", "AIzaSyA92Np6UCnjIDhyKr-xFWcPDgWwcZ9Q63M")
-
+_api_key = HF_TOKEN or os.getenv("GROQ_API_KEY") or os.getenv("GEMINI_API_KEY", "")
 
 SYSTEM_PROMPT = """You are an expert code reviewer. You will be given a code diff from a pull request.
 Your job is to identify ALL bugs, security vulnerabilities, performance issues, and logic errors.
@@ -100,7 +101,49 @@ def parse_llm_response(content: str) -> Action:
     )
 
 
-def run_task(client: OpenAI, task_id: str, model: str, verbose: bool = True) -> Dict[str, Any]:
+def get_providers(model_arg):
+    providers = []
+    
+    # 1. Hackathon Proxy environment (if injected by validator)
+    if os.getenv("HF_TOKEN") and os.getenv("API_BASE_URL") and "generative" not in os.getenv("API_BASE_URL", "") and "groq" not in os.getenv("API_BASE_URL", ""):
+        providers.append({
+            "name": "Hackathon Proxy",
+            "api_key": os.getenv("HF_TOKEN"),
+            "base_url": os.getenv("API_BASE_URL"),
+            "model": os.getenv("MODEL_NAME", model_arg)
+        })
+
+    # 2. Main Provider: Groq
+    if os.environ.get("GROQ_API_KEY"):
+        providers.append({
+            "name": "Groq",
+            "api_key": os.environ.get("GROQ_API_KEY"),
+            "base_url": "https://api.groq.com/openai/v1",
+            "model": "llama-3.3-70b-versatile"
+        })
+        
+    # 3. Fallback: Gemini
+    if os.environ.get("GEMINI_API_KEY"):
+        providers.append({
+            "name": "Gemini",
+            "api_key": os.environ.get("GEMINI_API_KEY"),
+            "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
+            "model": "gemini-2.0-flash"
+        })
+        
+    # Fallback to defaults
+    if not providers:
+        providers.append({
+            "name": "Default",
+            "api_key": _api_key,
+            "base_url": API_BASE_URL,
+            "model": model_arg
+        })
+        
+    return providers
+
+
+def run_task(task_id: str, providers: list, verbose: bool = True) -> Dict[str, Any]:
     env = CodeReviewEnv(task_id=task_id)
     obs = env.reset(task_id=task_id)
 
@@ -109,23 +152,35 @@ def run_task(client: OpenAI, task_id: str, model: str, verbose: bool = True) -> 
 
     # REQUIRED: [START] block
     print(f"[START] task={task_id}", flush=True)
-
-    try:
-        # All LLM calls use OpenAI client configured via checklist variables
-        response = client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": build_user_prompt(obs.model_dump())},
-            ],
-            temperature=0.0,
-            max_tokens=2000,
-        )
-        action = parse_llm_response(response.choices[0].message.content)
-    except Exception as e:
+    
+    action = None
+    
+    for provider in providers:
+        client = OpenAI(api_key=provider["api_key"], base_url=provider["base_url"])
         if verbose:
-            print(f"  [ERROR] {e}", flush=True)
-        action = Action(comments=[], verdict="comment", summary=f"Error: {e}")
+            print(f"  [INFO] Attempting inference with {provider['name']} ({provider['model']})", flush=True)
+            
+        try:
+            response = client.chat.completions.create(
+                model=provider["model"],
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": build_user_prompt(obs.model_dump())},
+                ],
+                temperature=0.0,
+                max_tokens=2000,
+            )
+            action = parse_llm_response(response.choices[0].message.content)
+            break # Success, exit provider loop
+        except Exception as e:
+            err_str = str(e)
+            if verbose:
+                print(f"  [ERROR] {provider['name']} failed: {err_str}", flush=True)
+            if "429" in err_str or "quota" in err_str.lower() or "RESOURCE_EXHAUSTED" in err_str:
+                if verbose:
+                    print(f"  [INFO] Rate limit reached on {provider['name']}, switching to fallback...", flush=True)
+            action = Action(comments=[], verdict="comment", summary=f"Error: {e}")
+            continue # Try next provider
 
     _, reward, _, info = env.step(action)
 
@@ -169,22 +224,20 @@ def main():
     parser.add_argument("--output-json", action="store_true")
     args = parser.parse_args()
 
-    # All LLM calls use OpenAI client configured via checklist variables
-    client = OpenAI(
-        api_key=_api_key,
-        base_url=API_BASE_URL,
-    )
+    providers = get_providers(args.model)
 
     task_ids = [args.task] if args.task else ["easy", "medium", "hard"]
-    results = [run_task(client, t, args.model, not args.output_json) for t in task_ids]
+    results = [run_task(t, providers, not args.output_json) for t in task_ids]
 
     if args.output_json:
+        # Just grab the first provider's model as a proxy for what was used across tasks 
+        used_model = providers[0]['model'] if providers else args.model
         print(json.dumps({
             "scores": [{"task_id": r["task_id"], "task_name": r["task_name"],
                         "difficulty": r["difficulty"], "score": r["score"],
                         "feedback": r["feedback"]} for r in results],
-            "model_used": args.model,
-            "note": "Temperature=0. Uses API_BASE_URL + HF_TOKEN from environment.",
+            "model_used": used_model,
+            "note": "Temperature=0. Uses environment variables with Groq->Gemini fallback.",
         }), flush=True)
     else:
         print(f"\n{'='*60}\n  BASELINE SCORES\n{'='*60}", flush=True)

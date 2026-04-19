@@ -17,6 +17,8 @@ import sys
 import json
 import argparse
 from typing import Dict, Any
+from dotenv import load_dotenv
+load_dotenv()
 
 from openai import OpenAI
 from environment import CodeReviewEnv
@@ -103,28 +105,70 @@ def parse_llm_response(content: str) -> Action:
     )
 
 
-def run_task(client: OpenAI, task_id: str, model: str, verbose: bool = True) -> Dict[str, Any]:
+def get_providers(model_arg):
+    providers = []
+
+    # 1. Groq
+    if os.environ.get("GROQ_API_KEY"):
+        providers.append({
+            "name": "Groq",
+            "api_key": os.environ.get("GROQ_API_KEY"),
+            "base_url": "https://api.groq.com/openai/v1",
+            "model": "llama-3.3-70b-versatile"
+        })
+        
+    # 2. Gemini
+    if os.environ.get("GEMINI_API_KEY"):
+        providers.append({
+            "name": "Gemini",
+            "api_key": os.environ.get("GEMINI_API_KEY"),
+            "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
+            "model": "gemini-2.0-flash"
+        })
+        
+    # 3. Default
+    if not providers:
+        providers.append({
+            "name": "Default",
+            "api_key": API_KEY,
+            "base_url": API_BASE_URL,
+            "model": model_arg
+        })
+        
+    return providers
+
+
+def run_task(task_id: str, providers: list, verbose: bool = True) -> Dict[str, Any]:
     env = CodeReviewEnv(task_id=task_id)
     obs = env.reset(task_id=task_id)
 
     if verbose:
         print(f"\n{'='*60}\n  Task: {task_id.upper()} — {obs.file_name}\n{'='*60}")
 
-    try:
-        response = client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": build_user_prompt(obs.model_dump())},
-            ],
-            temperature=0.0,
-            max_tokens=2000,
-        )
-        action = parse_llm_response(response.choices[0].message.content)
-    except Exception as e:
+    action = None
+    
+    for provider in providers:
+        client = OpenAI(api_key=provider["api_key"], base_url=provider["base_url"])
         if verbose:
-            print(f"  [ERROR] {e}")
-        action = Action(comments=[], verdict="comment", summary=f"Error: {e}")
+            print(f"  [INFO] Attempting inference with {provider['name']} ({provider['model']})", flush=True)
+
+        try:
+            response = client.chat.completions.create(
+                model=provider["model"],
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": build_user_prompt(obs.model_dump())},
+                ],
+                temperature=0.0,
+                max_tokens=2000,
+            )
+            action = parse_llm_response(response.choices[0].message.content)
+            break # Success
+        except Exception as e:
+            if verbose:
+                print(f"  [ERROR] {provider['name']} failed: {e}")
+            action = Action(comments=[], verdict="comment", summary=f"Error: {e}")
+            continue # Try next provider
 
     _, reward, _, info = env.step(action)
     episode_history = [{
@@ -161,21 +205,19 @@ def main():
     parser.add_argument("--output-json", action="store_true")
     args = parser.parse_args()
 
-    if not API_KEY:
-        print("ERROR: No API_KEY or GEMINI_API_KEY env variable found.", file=sys.stderr)
-        sys.exit(1)
+    providers = get_providers(args.model)
 
-    client = OpenAI(api_key=API_KEY, base_url=API_BASE_URL)
     task_ids = [args.task] if args.task else ["easy", "medium", "hard"]
-    results = [run_task(client, t, args.model, not args.output_json) for t in task_ids]
+    results = [run_task(t, providers, not args.output_json) for t in task_ids]
 
     if args.output_json:
+        used_model = providers[0]['model'] if providers else args.model
         print(json.dumps({
             "scores": [{"task_id": r["task_id"], "task_name": r["task_name"],
                         "difficulty": r["difficulty"], "score": r["score"],
                         "feedback": r["feedback"]} for r in results],
-            "model_used": args.model,
-            "note": "Temperature=0. Provider: Google Gemini free tier.",
+            "model_used": used_model,
+            "note": "Temperature=0. Provider: Groq -> Gemini fallback.",
         }))
     else:
         print(f"\n{'='*60}\n  BASELINE SCORES\n{'='*60}")
