@@ -1616,13 +1616,13 @@
       gap: 32px;
       margin-top: 32px;
     }
-    
+
     .free-input-panel {
       display: flex;
       flex-direction: column;
       gap: 16px;
     }
-    
+
     .free-editor-wrapper {
       position: relative;
       background: #0d1117;
@@ -1634,12 +1634,12 @@
       flex-direction: column;
       min-height: 300px;
     }
-    
+
     .free-editor-wrapper:focus-within {
       border-color: var(--purple);
       box-shadow: 0 0 0 1px var(--purple);
     }
-    
+
     #free-code-input {
       background: transparent;
       border: none;
@@ -1653,11 +1653,11 @@
       min-height: 300px;
       outline: none;
     }
-    
+
     #free-code-input::placeholder {
       color: var(--muted);
     }
-    
+
     .free-output-panel {
       background: var(--surface);
       border: 1px solid var(--border);
@@ -1666,7 +1666,7 @@
       display: flex;
       flex-direction: column;
     }
-    
+
     .empty-state {
       display: flex;
       flex-direction: column;
@@ -1677,7 +1677,7 @@
       text-align: center;
       height: 100%;
     }
-    
+
     .empty-state svg {
       width: 48px;
       height: 48px;
@@ -1686,7 +1686,7 @@
       fill: none;
       stroke-width: 1.5;
     }
-    
+
     .loading-state {
       display: none;
       flex-direction: column;
@@ -1695,13 +1695,13 @@
       padding: 64px 32px;
       height: 100%;
     }
-    
+
     .results-state {
       display: none;
       flex-direction: column;
       height: 100%;
     }
-    
+
     .results-summary-bar {
       padding: 16px 24px;
       border-bottom: 1px solid var(--border);
@@ -1711,7 +1711,7 @@
       flex-wrap: wrap;
       gap: 16px;
     }
-    
+
     .verdict-badge {
       padding: 4px 10px;
       border-radius: 4px;
@@ -1720,29 +1720,61 @@
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
-    
-    .verdict-approve { background: rgba(35, 134, 54, 0.15); color: #3fb950; border: 1px solid rgba(63, 185, 80, 0.3); }
-    .verdict-request_changes { background: rgba(218, 54, 51, 0.15); color: #ff7b72; border: 1px solid rgba(255, 123, 114, 0.3); }
-    .verdict-comment { background: rgba(210, 153, 34, 0.15); color: #e3b341; border: 1px solid rgba(227, 179, 65, 0.3); }
-    .verdict-error { background: rgba(218, 54, 51, 0.15); color: #ff7b72; border: 1px solid rgba(255, 123, 114, 0.3); }
-    
+
+    .verdict-approve {
+      background: rgba(35, 134, 54, 0.15);
+      color: #3fb950;
+      border: 1px solid rgba(63, 185, 80, 0.3);
+    }
+
+    .verdict-request_changes {
+      background: rgba(218, 54, 51, 0.15);
+      color: #ff7b72;
+      border: 1px solid rgba(255, 123, 114, 0.3);
+    }
+
+    .verdict-comment {
+      background: rgba(210, 153, 34, 0.15);
+      color: #e3b341;
+      border: 1px solid rgba(227, 179, 65, 0.3);
+    }
+
+    .verdict-error {
+      background: rgba(218, 54, 51, 0.15);
+      color: #ff7b72;
+      border: 1px solid rgba(255, 123, 114, 0.3);
+    }
+
     .severity-counts {
       display: flex;
       gap: 12px;
       font-size: 13px;
     }
-    
-    .scount { display: flex; align-items: center; gap: 4px; }
-    .sc-crit { color: #ff7b72; }
-    .sc-maj { color: #e3b341; }
-    .sc-min { color: var(--muted); }
-    
+
+    .scount {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .sc-crit {
+      color: #ff7b72;
+    }
+
+    .sc-maj {
+      color: #e3b341;
+    }
+
+    .sc-min {
+      color: var(--muted);
+    }
+
     .results-body {
       padding: 24px;
       overflow-y: auto;
       flex: 1;
     }
-    
+
     .ai-summary {
       font-size: 14px;
       line-height: 1.6;
@@ -1752,11 +1784,11 @@
       border-left: 3px solid var(--purple);
       border-radius: 0 4px 4px 0;
     }
-    
+
     .positives-list {
       margin-bottom: 32px;
     }
-    
+
     .positives-list h4 {
       font-size: 13px;
       color: var(--muted);
@@ -1767,7 +1799,7 @@
       align-items: center;
       gap: 8px;
     }
-    
+
     .positives-list ul {
       list-style: none;
       padding: 0;
@@ -1776,44 +1808,52 @@
       flex-direction: column;
       gap: 8px;
     }
-    
+
     .positives-list li {
       display: flex;
       align-items: flex-start;
       gap: 8px;
       font-size: 13px;
     }
-    
+
     .positives-list li::before {
       content: '✓';
       color: #3fb950;
       font-weight: bold;
     }
-    
+
     .issues-list {
       display: flex;
       flex-direction: column;
       gap: 16px;
     }
-    
+
     .issue-card {
       padding: 16px;
       border: 1px solid var(--border);
       border-radius: var(--radius-sm);
       background: var(--bg);
     }
-    
-    .ic-critical { border-left: 3px solid #ff7b72; }
-    .ic-major { border-left: 3px solid #e3b341; }
-    .ic-minor { border-left: 3px solid var(--border2); }
-    
+
+    .ic-critical {
+      border-left: 3px solid #ff7b72;
+    }
+
+    .ic-major {
+      border-left: 3px solid #e3b341;
+    }
+
+    .ic-minor {
+      border-left: 3px solid var(--border2);
+    }
+
     .issue-header {
       display: flex;
       align-items: center;
       gap: 12px;
       margin-bottom: 8px;
     }
-    
+
     .issue-line {
       font-family: 'JetBrains Mono', monospace;
       font-size: 12px;
@@ -1822,7 +1862,7 @@
       padding: 2px 6px;
       border-radius: 4px;
     }
-    
+
     .issue-badge {
       font-size: 11px;
       padding: 2px 6px;
@@ -1830,17 +1870,32 @@
       font-weight: 600;
       text-transform: uppercase;
     }
-    
-    .ib-type { background: var(--surface); border: 1px solid var(--border2); }
-    .ib-crit { background: rgba(218, 54, 51, 0.1); color: #ff7b72; }
-    .ib-maj { background: rgba(210, 153, 34, 0.1); color: #e3b341; }
-    .ib-min { background: var(--surface); color: var(--muted); }
-    
+
+    .ib-type {
+      background: var(--surface);
+      border: 1px solid var(--border2);
+    }
+
+    .ib-crit {
+      background: rgba(218, 54, 51, 0.1);
+      color: #ff7b72;
+    }
+
+    .ib-maj {
+      background: rgba(210, 153, 34, 0.1);
+      color: #e3b341;
+    }
+
+    .ib-min {
+      background: var(--surface);
+      color: var(--muted);
+    }
+
     .issue-desc {
       font-size: 14px;
       margin-bottom: 8px;
     }
-    
+
     .issue-fix {
       font-size: 13px;
       color: #3fb950;
@@ -2176,6 +2231,11 @@
               <option value="hard">Hard — Concurrency Hunt</option>
               <option value="django-auth">Hard — Django Auth Logic</option>
               <option value="node-race">Hard — Node.js Race Condition</option>
+              <option value="js_async">Medium — JS Async Bug Review</option>
+              <option value="api_security">Hard — API Security Review</option>
+              <option value="orm_bugs">Medium — ORM Bug Review</option>
+              <option value="auth_system">Hard — JWT Auth System</option>
+              <option value="data_pipeline">Medium — Data Pipeline Bugs</option>
             </select>
 
             <button class="btn btn-purple btn-full" id="start-btn" style="margin-top:16px;" onclick="startReview()">
@@ -2329,7 +2389,8 @@
       <div class="section-header fade-up">
         <div style="display:flex;align-items:center;gap:12px;">
           <div class="section-label">Beta Feature</div>
-          <span style="background:rgba(210,153,34,0.15);color:#e3b341;border:1px solid rgba(227,179,65,0.3);padding:2px 8px;border-radius:12px;font-size:11px;font-weight:bold;text-transform:uppercase;">BETA</span>
+          <span
+            style="background:rgba(210,153,34,0.15);color:#e3b341;border:1px solid rgba(227,179,65,0.3);padding:2px 8px;border-radius:12px;font-size:11px;font-weight:bold;text-transform:uppercase;">BETA</span>
         </div>
         <h2 class="section-title">Free Code Review</h2>
         <p class="section-sub">Paste any code — get instant AI feedback</p>
@@ -2340,7 +2401,8 @@
         <div class="free-input-panel">
           <div style="display:flex;gap:12px;">
             <div style="flex:1;">
-              <select id="free-language" aria-label="Language selector" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);padding:10px 14px;outline:none;">
+              <select id="free-language" aria-label="Language selector"
+                style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);padding:10px 14px;outline:none;">
                 <option value="python">Python</option>
                 <option value="javascript">JavaScript</option>
                 <option value="typescript">TypeScript</option>
@@ -2351,23 +2413,26 @@
               </select>
             </div>
             <div style="flex:2;">
-              <input type="text" id="free-context" placeholder="Context: What does this code do? (optional)" 
+              <input type="text" id="free-context" placeholder="Context: What does this code do? (optional)"
                 style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);padding:10px 14px;outline:none;">
             </div>
           </div>
 
           <div class="free-editor-wrapper">
-            <textarea id="free-code-input" placeholder="Paste your code here...&#10;Supports Python, JS, SQL, Go, Java, C++ and more"></textarea>
+            <textarea id="free-code-input"
+              placeholder="Paste your code here...&#10;Supports Python, JS, SQL, Go, Java, C++ and more"></textarea>
           </div>
 
-          <button class="btn btn-purple btn-full" id="run-free-btn" onclick="runFreeReview()" style="height:48px;font-size:15px;font-weight:600;box-shadow:0 0 16px rgba(142,68,173,0.3);">
-            <svg viewBox="0 0 24 24" style="width:18px;height:18px;margin-right:8px;stroke:currentColor;fill:none;stroke-width:2;vertical-align:middle;margin-top:-2px;">
+          <button class="btn btn-purple btn-full" id="run-free-btn" onclick="runFreeReview()"
+            style="height:48px;font-size:15px;font-weight:600;box-shadow:0 0 16px rgba(142,68,173,0.3);">
+            <svg viewBox="0 0 24 24"
+              style="width:18px;height:18px;margin-right:8px;stroke:currentColor;fill:none;stroke-width:2;vertical-align:middle;margin-top:-2px;">
               <circle cx="11" cy="11" r="8"></circle>
               <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
             </svg>
             Review My Code
           </button>
-          
+
           <div style="font-size:11px;color:var(--muted);text-align:center;">
             AI-powered review. No ground truth scoring. For exploration and demos only.
           </div>
@@ -2375,7 +2440,7 @@
 
         <!-- RIGHT: Output -->
         <div class="free-output-panel">
-          
+
           <!-- Empty State -->
           <div class="empty-state" id="free-empty">
             <svg viewBox="0 0 24 24">
@@ -2387,14 +2452,15 @@
             </svg>
             <div>Paste code and click <strong>Review</strong> to get AI feedback</div>
           </div>
-          
+
           <!-- Loading State -->
           <div class="loading-state" id="free-loading">
             <div class="spinner" style="width:32px;height:32px;border-width:3px;margin-bottom:16px;"></div>
             <div style="color:var(--text);font-weight:600;">AI is reviewing your code...</div>
-            <div style="color:var(--muted);font-size:13px;margin-top:8px;">This usually takes 5-10 seconds depending on code length.</div>
+            <div style="color:var(--muted);font-size:13px;margin-top:8px;">This usually takes 5-10 seconds depending on
+              code length.</div>
           </div>
-          
+
           <!-- Results State -->
           <div class="results-state" id="free-results">
             <div class="results-summary-bar">
@@ -2408,15 +2474,15 @@
                 <div class="scount"><span class="sc-min">⚪</span> <span id="sc-mi">0</span> minor</div>
               </div>
             </div>
-            
+
             <div class="results-body">
               <div class="ai-summary" id="free-summary"></div>
-              
+
               <div class="positives-list" id="free-positives">
                 <h4>What looks good</h4>
                 <ul id="free-pos-ul"></ul>
               </div>
-              
+
               <div class="issues-list" id="free-issues">
                 <!-- Issues populated by JS -->
               </div>
@@ -2528,7 +2594,8 @@
           </div>
           <h3 class="task-name">JavaScript Async Flow Review</h3>
           <p class="task-file">api/fetcher.js</p>
-          <p class="task-desc">Review a JavaScript module handling data fetching and state updates. Find async/await pitfalls and race conditions.</p>
+          <p class="task-desc">Review a JavaScript module handling data fetching and state updates. Find async/await
+            pitfalls and race conditions.</p>
           <div class="task-tags">
             <span class="tag">Missing Await</span>
             <span class="tag">Promise Errors</span>
@@ -2542,7 +2609,8 @@
             <span class="sep">•</span>
             <span>Score: 0.92</span>
           </div>
-          <button class="task-try-btn" id="try-js-async-btn" onclick="jumpToDemo('js-async')" aria-label="Try JS async task">Try this task →</button>
+          <button class="task-try-btn" id="try-js-async-btn" onclick="jumpToDemo('js-async')"
+            aria-label="Try JS async task">Try this task →</button>
         </div>
 
         <!-- SQL Injection -->
@@ -2552,7 +2620,8 @@
           </div>
           <h3 class="task-name">Advanced SQL Injection Hunt</h3>
           <p class="task-file">db/reports.js</p>
-          <p class="task-desc">Review a Node.js database service. Identify multiple sophisticated SQL injection patterns in dynamic queries.</p>
+          <p class="task-desc">Review a Node.js database service. Identify multiple sophisticated SQL injection patterns
+            in dynamic queries.</p>
           <div class="task-tags">
             <span class="tag">Order By Injection</span>
             <span class="tag">Limit Injection</span>
@@ -2566,7 +2635,8 @@
             <span class="sep">•</span>
             <span>Score: 0.88</span>
           </div>
-          <button class="task-try-btn" id="try-sql-injection-btn" onclick="jumpToDemo('sql-injection')" aria-label="Try SQL injection task">Try this task →</button>
+          <button class="task-try-btn" id="try-sql-injection-btn" onclick="jumpToDemo('sql-injection')"
+            aria-label="Try SQL injection task">Try this task →</button>
         </div>
 
         <!-- React Security -->
@@ -2576,7 +2646,8 @@
           </div>
           <h3 class="task-name">React Component Security</h3>
           <p class="task-file">components/UserProfile.jsx</p>
-          <p class="task-desc">Review a React component for XSS risks (dangerouslySetInnerHTML) and sensitive data leaks in console/URLs.</p>
+          <p class="task-desc">Review a React component for XSS risks (dangerouslySetInnerHTML) and sensitive data leaks
+            in console/URLs.</p>
           <div class="task-tags">
             <span class="tag">XSS</span>
             <span class="tag">Data Leaks</span>
@@ -2590,7 +2661,8 @@
             <span class="sep">•</span>
             <span>Score: 0.90</span>
           </div>
-          <button class="task-try-btn" id="try-react-security-btn" onclick="jumpToDemo('react-security')" aria-label="Try React task">Try this task →</button>
+          <button class="task-try-btn" id="try-react-security-btn" onclick="jumpToDemo('react-security')"
+            aria-label="Try React task">Try this task →</button>
         </div>
 
         <!-- Django Auth -->
@@ -2600,7 +2672,8 @@
           </div>
           <h3 class="task-name">Django Auth Logic Review</h3>
           <p class="task-file">auth/middleware.py</p>
-          <p class="task-desc">Review Django middleware and auth backends for bypasses, timing attacks, and improper exception handling.</p>
+          <p class="task-desc">Review Django middleware and auth backends for bypasses, timing attacks, and improper
+            exception handling.</p>
           <div class="task-tags">
             <span class="tag">Auth Bypass</span>
             <span class="tag">Timing Attack</span>
@@ -2614,7 +2687,8 @@
             <span class="sep">•</span>
             <span>Score: 0.85</span>
           </div>
-          <button class="task-try-btn" id="try-django-auth-btn" onclick="jumpToDemo('django-auth')" aria-label="Try Django task">Try this task →</button>
+          <button class="task-try-btn" id="try-django-auth-btn" onclick="jumpToDemo('django-auth')"
+            aria-label="Try Django task">Try this task →</button>
         </div>
 
         <!-- Node Race -->
@@ -2624,7 +2698,8 @@
           </div>
           <h3 class="task-name">Node.js Concurrency Issues</h3>
           <p class="task-file">services/inventory.js</p>
-          <p class="task-desc">Identify race conditions and stale state updates in a Node.js singleton service responsible for inventory tracking.</p>
+          <p class="task-desc">Identify race conditions and stale state updates in a Node.js singleton service
+            responsible for inventory tracking.</p>
           <div class="task-tags">
             <span class="tag">Race Condition</span>
             <span class="tag">Stale State</span>
@@ -2638,7 +2713,8 @@
             <span class="sep">•</span>
             <span>Score: 0.82</span>
           </div>
-          <button class="task-try-btn" id="try-node-race-btn" onclick="jumpToDemo('node-race')" aria-label="Try Node race task">Try this task →</button>
+          <button class="task-try-btn" id="try-node-race-btn" onclick="jumpToDemo('node-race')"
+            aria-label="Try Node race task">Try this task →</button>
         </div>
       </div>
     </div>
@@ -2673,6 +2749,125 @@
           </tbody>
         </table>
       </div>
+    </div>
+    <!-- JS Async Bug Review -->
+    <div class="task-card medium fade-up delay-1" id="task-card-js_async">
+      <div class="task-card-top">
+        <span class="diff-badge">MEDIUM</span>
+      </div>
+      <h3 class="task-name">JavaScript Async Bug Review</h3>
+      <p class="task-file">api/async_handler.js</p>
+      <p class="task-desc">Review an async JS handler with unhandled promise rejections, missing await, callback hell,
+        memory leak from uncleaned event listeners, and swallowed errors.</p>
+      <div class="task-tags">
+        <span class="tag">Missing Await</span>
+        <span class="tag">Memory Leak</span>
+        <span class="tag">Promise.all</span>
+        <span class="tag">Callback Hell</span>
+      </div>
+      <div class="task-meta">
+        <span>Max 5 steps</span>
+        <span class="sep">•</span>
+        <span>5 bugs hidden</span>
+      </div>
+      <button class="task-try-btn" onclick="jumpToDemo('js_async')" aria-label="Try JS async bug task">Try this task
+        →</button>
+    </div>
+
+    <!-- API Security Review -->
+    <div class="task-card hard fade-up delay-2" id="task-card-api_security">
+      <div class="task-card-top">
+        <span class="diff-badge">HARD</span>
+      </div>
+      <h3 class="task-name">API Security Review</h3>
+      <p class="task-file">api/endpoints.py</p>
+      <p class="task-desc">Review a FastAPI endpoints file with JWT algorithm bypass, wildcard CORS, missing rate
+        limiting, exposed stack traces, IDOR, and debug mode enabled in production.</p>
+      <div class="task-tags">
+        <span class="tag">JWT Bypass</span>
+        <span class="tag">CORS Wildcard</span>
+        <span class="tag">IDOR</span>
+        <span class="tag">Stack Trace Leak</span>
+      </div>
+      <div class="task-meta">
+        <span>Max 6 steps</span>
+        <span class="sep">•</span>
+        <span>6 vulnerabilities</span>
+      </div>
+      <button class="task-try-btn" onclick="jumpToDemo('api_security')" aria-label="Try API security task">Try this task
+        →</button>
+    </div>
+
+    <!-- ORM Bugs -->
+    <div class="task-card medium fade-up delay-3" id="task-card-orm_bugs">
+      <div class="task-card-top">
+        <span class="diff-badge">MEDIUM</span>
+      </div>
+      <h3 class="task-name">Database ORM Bug Review</h3>
+      <p class="task-file">models/database.py</p>
+      <p class="task-desc">Review SQLAlchemy ORM models for N+1 queries, missing foreign key indexes, uncommitted
+        transactions, mutable default arguments, and missing cascade rules.</p>
+      <div class="task-tags">
+        <span class="tag">N+1 Query</span>
+        <span class="tag">Missing Index</span>
+        <span class="tag">Mutable Default</span>
+        <span class="tag">No Commit</span>
+      </div>
+      <div class="task-meta">
+        <span>Max 5 steps</span>
+        <span class="sep">•</span>
+        <span>5 bugs hidden</span>
+      </div>
+      <button class="task-try-btn" onclick="jumpToDemo('orm_bugs')" aria-label="Try ORM bugs task">Try this task
+        →</button>
+    </div>
+
+    <!-- JWT Auth System -->
+    <div class="task-card hard fade-up delay-1" id="task-card-auth_system">
+      <div class="task-card-top">
+        <span class="diff-badge">HARD</span>
+      </div>
+      <h3 class="task-name">JWT Auth System Review</h3>
+      <p class="task-file">auth/jwt_handler.py</p>
+      <p class="task-desc">Review a JWT auth system for weak secrets, missing token expiry, disabled signature
+        verification, session fixation, missing token revocation, and timing attacks.</p>
+      <div class="task-tags">
+        <span class="tag">Weak Secret</span>
+        <span class="tag">No Expiry</span>
+        <span class="tag">Session Fixation</span>
+        <span class="tag">Timing Attack</span>
+      </div>
+      <div class="task-meta">
+        <span>Max 7 steps</span>
+        <span class="sep">•</span>
+        <span>7 vulnerabilities</span>
+      </div>
+      <button class="task-try-btn" onclick="jumpToDemo('auth_system')" aria-label="Try JWT auth task">Try this task
+        →</button>
+    </div>
+
+    <!-- Data Pipeline -->
+    <div class="task-card medium fade-up delay-2" id="task-card-data_pipeline">
+      <div class="task-card-top">
+        <span class="diff-badge">MEDIUM</span>
+      </div>
+      <h3 class="task-name">Data Pipeline Bug Review</h3>
+      <p class="task-file">pipeline/processor.py</p>
+      <p class="task-desc">Review a batch data processing pipeline for memory leaks, missing None checks, silent int8
+        overflow, unclosed file handles, bare except clauses, and off-by-one slicing.</p>
+      <div class="task-tags">
+        <span class="tag">Memory Leak</span>
+        <span class="tag">int8 Overflow</span>
+        <span class="tag">File Handle Leak</span>
+        <span class="tag">Bare Except</span>
+      </div>
+      <div class="task-meta">
+        <span>Max 6 steps</span>
+        <span class="sep">•</span>
+        <span>6 bugs hidden</span>
+      </div>
+      <button class="task-try-btn" onclick="jumpToDemo('data_pipeline')" aria-label="Try data pipeline task">Try this
+        task →</button>
     </div>
   </section>
 
@@ -3160,7 +3355,7 @@
         const issuesEl = document.getElementById('free-issues');
         issuesEl.innerHTML = '';
         const sevColors = { critical: 'var(--red)', major: 'var(--amber)', minor: 'var(--muted)' };
-        const sevIcons  = { critical: '🔴', major: '🟡', minor: '⚪' };
+        const sevIcons = { critical: '🔴', major: '🟡', minor: '⚪' };
         if (data.issues && data.issues.length > 0) {
           data.issues.forEach(issue => {
             const sev = (issue.severity || 'minor').toLowerCase();
@@ -3170,17 +3365,17 @@
               + (sevColors[sev] || 'var(--muted)') + ';border-radius:var(--radius-sm);padding:14px 16px;margin-bottom:10px;';
             card.innerHTML =
               '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">' +
-                '<span style="font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:'+ (sevColors[sev]||'var(--muted)') + ';">' +
-                  (sevIcons[sev]||'') + ' ' + sev + ' &bull; ' + (issue.issue_type || '') +
-                '</span>' +
-                '<span style="font-size:11px;color:var(--muted);">Line ' + (issue.line_number || '?') + '</span>' +
+              '<span style="font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:' + (sevColors[sev] || 'var(--muted)') + ';">' +
+              (sevIcons[sev] || '') + ' ' + sev + ' &bull; ' + (issue.issue_type || '') +
+              '</span>' +
+              '<span style="font-size:11px;color:var(--muted);">Line ' + (issue.line_number || '?') + '</span>' +
               '</div>' +
               '<div style="font-size:13px;color:var(--text);margin-bottom:' + (issue.suggested_fix ? '8px' : '0') + ';">' +
-                (issue.description || '') +
+              (issue.description || '') +
               '</div>' +
               (issue.suggested_fix
                 ? '<div style="font-size:12px;color:var(--cyan);background:rgba(6,182,212,.07);border-radius:6px;padding:8px 12px;margin-top:6px;">' +
-                    '💡 ' + issue.suggested_fix + '</div>'
+                '💡 ' + issue.suggested_fix + '</div>'
                 : '');
             issuesEl.appendChild(card);
           });

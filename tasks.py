@@ -718,6 +718,490 @@ def merge_configs(base_config, override_config):
         "required_verdict": "request_changes",
         "success_threshold": 0.3,
     },
+
+    "js_async": {
+        "id": "js_async",
+        "name": "JavaScript Async Bug Review",
+        "description": "Review a JavaScript async handler with 5 bugs: unhandled promise rejection, missing await, callback hell, no error boundary, and memory leak from uncleaned event listener.",
+        "difficulty": "medium",
+        "max_steps": 5,
+        "file_name": "api/async_handler.js",
+        "pr_title": "Add async API handler for user data fetching",
+        "pr_description": "Implements async handler to fetch and process user data from external API. Adds caching and retry logic.",
+        "diff": """\
+--- a/api/async_handler.js
++++ b/api/async_handler.js
+@@ -1,40 +1,60 @@
++const EventEmitter = require('events');
++const emitter = new EventEmitter();
++
++async function fetchUserData(userId) {
++    const response = fetch(`/api/users/${userId}`);  // line 5: missing await
++    return response.json();
++}
++
++function processData(data, callback) {
++    getData(data, function(err, result) {             // line 9: callback hell starts
++        parseResult(result, function(err, parsed) {
++            saveToDb(parsed, function(err, saved) {  // line 11: deeply nested callbacks
++                callback(saved);
++            });
++        });
++    });
++}
++
++async function handleRequest(req, res) {
++    const userData = await fetchUserData(req.userId);
++    
++    emitter.on('data', (chunk) => {                  // line 21: listener never removed = memory leak
++        processChunk(chunk);
++    });
++
++    Promise.all([                                    // line 25: unhandled promise rejection
++        fetchProfile(req.userId),
++        fetchPermissions(req.userId)
++    ]);
++
++    try {
++        const result = processUserData(userData);
++        res.send(result);
++    } catch(e) {
++        console.log(e);                              // line 34: swallows error, no response sent
++    }
++
++    const timer = setInterval(() => {               // line 37: interval never cleared
++        checkStatus();
++    }, 1000);
++}
++
++module.exports = { handleRequest };
+""",
+        "required_verdict": "request_changes",
+        "known_issues": [
+            {
+                "line_number": 5,
+                "issue_type": "bug",
+                "severity": "major",
+                "description": "Missing await on fetch() call — returns Promise instead of response",
+                "keywords": ["await", "fetch", "promise", "missing"]
+            },
+            {
+                "line_number": 11,
+                "issue_type": "style",
+                "severity": "minor",
+                "description": "Callback hell — deeply nested callbacks should be replaced with async/await",
+                "keywords": ["callback", "nested", "hell", "async"]
+            },
+            {
+                "line_number": 21,
+                "issue_type": "bug",
+                "severity": "major",
+                "description": "Event listener added on every request but never removed — causes memory leak",
+                "keywords": ["memory leak", "listener", "emitter", "removed"]
+            },
+            {
+                "line_number": 25,
+                "issue_type": "bug",
+                "severity": "critical",
+                "description": "Promise.all() result not awaited — unhandled promise rejection if either promise fails",
+                "keywords": ["unhandled", "promise", "await", "rejection"]
+            },
+            {
+                "line_number": 34,
+                "issue_type": "bug",
+                "severity": "major",
+                "description": "Error caught but no error response sent to client — request hangs forever",
+                "keywords": ["error", "response", "catch", "hang"]
+            }
+        ]
+    },
+
+    "api_security": {
+        "id": "api_security",
+        "name": "API Security Review",
+        "description": "Review a Python FastAPI endpoints file with 6 security bugs: JWT bypass, CORS wildcard, missing rate limiting, exposed stack trace, insecure direct object reference, and debug mode enabled.",
+        "difficulty": "hard",
+        "max_steps": 6,
+        "file_name": "api/endpoints.py",
+        "pr_title": "Refactor API endpoints with JWT authentication",
+        "pr_description": "Adds JWT-based auth to all endpoints. Enables CORS for frontend. Adds error handling.",
+        "diff": """\
+--- a/api/endpoints.py
++++ b/api/endpoints.py
+@@ -1,50 +1,70 @@
++from fastapi import FastAPI, Request
++from jose import jwt
++import traceback
++
++app = FastAPI(debug=True)                            # line 4: debug mode exposes internals
++
++app.add_middleware(
++    CORSMiddleware,
++    allow_origins=["*"],                             # line 9: wildcard CORS
++    allow_methods=["*"],
++    allow_credentials=True,
++)
++
++SECRET_KEY = "secret"                                # line 14: weak JWT secret
++
++def verify_token(token: str):
++    try:
++        payload = jwt.decode(token, SECRET_KEY, algorithms=["none"])  # line 18: algorithm=none bypass
++        return payload
++    except:
++        return None                                  # line 21: returns None instead of raising
++
++@app.get("/users/{user_id}")
++def get_user(user_id: int, token: str):
++    user = db.query(f"SELECT * FROM users WHERE id={user_id}")  # line 25: IDOR - no ownership check
++    return user
++
++@app.exception_handler(Exception)
++def handle_error(request: Request, exc: Exception):
++    return JSONResponse(
++        status_code=500,
++        content={"error": traceback.format_exc()}   # line 32: full stack trace exposed to client
++    )
++
++@app.post("/login")
++def login(username: str, password: str):
++    user = authenticate(username, password)
++    token = jwt.encode({"sub": username}, SECRET_KEY)
++    return {"token": token}                          # line 39: no rate limiting on login endpoint
+""",
+        "required_verdict": "request_changes",
+        "known_issues": [
+            {
+                "line_number": 4,
+                "issue_type": "security",
+                "severity": "major",
+                "description": "debug=True exposes internal routes, error details and auto-reload in production",
+                "keywords": ["debug", "production", "exposed"]
+            },
+            {
+                "line_number": 9,
+                "issue_type": "security",
+                "severity": "major",
+                "description": "Wildcard CORS with allow_credentials=True is dangerous — allows any origin to make credentialed requests",
+                "keywords": ["CORS", "wildcard", "credentials", "origin"]
+            },
+            {
+                "line_number": 18,
+                "issue_type": "security",
+                "severity": "critical",
+                "description": "JWT decoded with algorithm='none' — allows unsigned tokens, complete auth bypass",
+                "keywords": ["JWT", "none", "algorithm", "bypass", "unsigned"]
+            },
+            {
+                "line_number": 25,
+                "issue_type": "security",
+                "severity": "critical",
+                "description": "No ownership check — any authenticated user can fetch any other user's data (IDOR)",
+                "keywords": ["IDOR", "ownership", "authorization", "access control"]
+            },
+            {
+                "line_number": 32,
+                "issue_type": "security",
+                "severity": "major",
+                "description": "Full stack trace returned in API response — leaks internal code structure to attackers",
+                "keywords": ["stack trace", "traceback", "exposed", "leak"]
+            },
+            {
+                "line_number": 39,
+                "issue_type": "security",
+                "severity": "major",
+                "description": "No rate limiting on /login endpoint — vulnerable to brute force attacks",
+                "keywords": ["rate limit", "brute force", "login", "throttle"]
+            }
+        ]
+    },
+
+    "orm_bugs": {
+        "id": "orm_bugs",
+        "name": "Database ORM Bug Review",
+        "description": "Review a SQLAlchemy ORM models file with 5 bugs: N+1 query, missing index on foreign key, transaction not committed, mutable default argument, and missing relationship cascade.",
+        "difficulty": "medium",
+        "max_steps": 5,
+        "file_name": "models/database.py",
+        "pr_title": "Add ORM models for orders and products",
+        "pr_description": "Implements SQLAlchemy models for the e-commerce order system. Adds relationships between User, Order, and Product.",
+        "diff": """\
+--- a/models/database.py
++++ b/models/database.py
+@@ -1,45 +1,65 @@
++from sqlalchemy import Column, Integer, String, ForeignKey
++from sqlalchemy.orm import relationship, Session
++
++class User(Base):
++    __tablename__ = "users"
++    id = Column(Integer, primary_key=True)
++    name = Column(String)
++    orders = relationship("Order")                   # line 8: missing cascade="all, delete-orphan"
++
++class Order(Base):
++    __tablename__ = "orders"
++    id = Column(Integer, primary_key=True)
++    user_id = Column(Integer, ForeignKey("users.id")) # line 13: missing index=True on FK
++    items = Column(String)
++
++def get_user_orders(session: Session, user_ids: list):
++    users = session.query(User).all()
++    for user in users:
++        print(user.orders)                           # line 19: N+1 query — lazy loads orders per user
++    return users
++
++def create_order(session: Session, user_id: int, items: list = []):  # line 22: mutable default arg
++    order = Order(user_id=user_id, items=str(items))
++    session.add(order)
++                                                     # line 25: missing session.commit()
++    return order
++
++def bulk_update_prices(session: Session, updates: dict):
++    for product_id, price in updates.items():
++        session.execute(
++            f"UPDATE products SET price={price} WHERE id={product_id}"  # line 31: raw SQL = SQL injection
++        )
++    session.commit()
+""",
+        "required_verdict": "request_changes",
+        "known_issues": [
+            {
+                "line_number": 8,
+                "issue_type": "bug",
+                "severity": "major",
+                "description": "relationship() missing cascade='all, delete-orphan' — orphaned Order rows left in DB when User deleted",
+                "keywords": ["cascade", "orphan", "delete", "relationship"]
+            },
+            {
+                "line_number": 13,
+                "issue_type": "performance",
+                "severity": "major",
+                "description": "Foreign key column user_id has no index — causes full table scan on every join",
+                "keywords": ["index", "foreign key", "scan", "performance"]
+            },
+            {
+                "line_number": 19,
+                "issue_type": "performance",
+                "severity": "critical",
+                "description": "N+1 query problem — accessing user.orders inside loop fires one SQL query per user",
+                "keywords": ["N+1", "lazy load", "query", "loop", "joinedload"]
+            },
+            {
+                "line_number": 22,
+                "issue_type": "bug",
+                "severity": "major",
+                "description": "Mutable default argument [] is shared across all calls — list persists between function calls",
+                "keywords": ["mutable", "default", "list", "shared", "argument"]
+            },
+            {
+                "line_number": 25,
+                "issue_type": "bug",
+                "severity": "critical",
+                "description": "session.commit() never called — order is added to session but never persisted to database",
+                "keywords": ["commit", "persist", "transaction", "session"]
+            }
+        ]
+    },
+
+    "auth_system": {
+        "id": "auth_system",
+        "name": "JWT Auth System Review",
+        "description": "Review a JWT authentication handler with 7 bugs: no expiry on tokens, weak secret key, session fixation, token not invalidated on logout, missing signature verification, timing attack on comparison, and tokens stored in localStorage.",
+        "difficulty": "hard",
+        "max_steps": 7,
+        "file_name": "auth/jwt_handler.py",
+        "pr_title": "Implement JWT authentication system",
+        "pr_description": "Full JWT-based authentication with login, logout, and token refresh. Stores tokens client-side.",
+        "diff": """\
+--- a/auth/jwt_handler.py
++++ b/auth/jwt_handler.py
+@@ -1,55 +1,75 @@
++import jwt
++import time
++
++SECRET = "abc123"                                    # line 4: weak, hardcoded secret key
++
++def create_token(user_id: int) -> str:
++    payload = {
++        "user_id": user_id,
++                                                     # line 9: no exp (expiry) field in payload
++    }
++    return jwt.encode(payload, SECRET, algorithm="HS256")
++
++def verify_token(token: str) -> dict:
++    try:
++        payload = jwt.decode(token, options={"verify_signature": False})  # line 15: skips signature check
++        return payload
++    except jwt.ExpiredSignatureError:
++        return {}
++
++def login(username: str, password: str, session: dict):
++    if authenticate(username, password):
++        session["user"] = username                   # line 22: session fixation — old session not regenerated
++        token = create_token(username)
++        return token
++
++def logout(token: str, session: dict):
++    session.clear()
++                                                     # line 28: token not added to blacklist/revoked
++
++def check_admin(user_token: str, required_role: str) -> bool:
++    user = get_user(user_token)
++    if user.role == required_role:                   # line 32: string comparison vulnerable to timing attack
++        return True
++    return False
++
++def reset_password(user_id: int, old_password: str, new_password: str):
++    if verify_password(old_password, stored_hash):
++        update_password(user_id, new_password)
++                                                     # line 39: old sessions not invalidated after password reset
+""",
+        "required_verdict": "request_changes",
+        "known_issues": [
+            {
+                "line_number": 4,
+                "issue_type": "security",
+                "severity": "critical",
+                "description": "Hardcoded weak secret key 'abc123' — trivially guessable, must use env var with strong random value",
+                "keywords": ["secret", "hardcoded", "weak", "env var"]
+            },
+            {
+                "line_number": 9,
+                "issue_type": "security",
+                "severity": "critical",
+                "description": "JWT token has no expiry (exp claim missing) — tokens are valid forever",
+                "keywords": ["expiry", "exp", "token", "forever", "expire"]
+            },
+            {
+                "line_number": 15,
+                "issue_type": "security",
+                "severity": "critical",
+                "description": "verify_signature=False disables JWT signature verification — any token accepted as valid",
+                "keywords": ["signature", "verify", "disabled", "bypass"]
+            },
+            {
+                "line_number": 22,
+                "issue_type": "security",
+                "severity": "major",
+                "description": "Session fixation — existing session ID not regenerated on login, allows session hijacking",
+                "keywords": ["session", "fixation", "regenerate", "hijack"]
+            },
+            {
+                "line_number": 28,
+                "issue_type": "security",
+                "severity": "major",
+                "description": "Logout does not invalidate the JWT token — token remains usable until expiry",
+                "keywords": ["logout", "blacklist", "revoke", "invalidate", "token"]
+            },
+            {
+                "line_number": 32,
+                "issue_type": "security",
+                "severity": "minor",
+                "description": "String equality check vulnerable to timing attack — use hmac.compare_digest() instead",
+                "keywords": ["timing attack", "compare_digest", "hmac", "equality"]
+            },
+            {
+                "line_number": 39,
+                "issue_type": "security",
+                "severity": "major",
+                "description": "Password reset does not invalidate existing sessions — attacker with old session stays logged in",
+                "keywords": ["password reset", "session", "invalidate", "old session"]
+            }
+        ]
+    },
+
+    "data_pipeline": {
+        "id": "data_pipeline",
+        "name": "Data Pipeline Bug Review",
+        "description": "Review a data processing pipeline with 6 bugs: memory leak from accumulating list, unchecked None input, wrong dtype causing silent overflow, file handle never closed, bare except swallowing errors, and off-by-one in batch slicing.",
+        "difficulty": "medium",
+        "max_steps": 6,
+        "file_name": "pipeline/processor.py",
+        "pr_title": "Add batch data processing pipeline",
+        "pr_description": "Implements chunked batch processor for large CSV datasets. Adds transformation and validation steps.",
+        "diff": """\
+--- a/pipeline/processor.py
++++ b/pipeline/processor.py
+@@ -1,50 +1,70 @@
++import numpy as np
++import csv
++
++results_cache = []                                   # line 4: module-level list grows forever = memory leak
++
++def process_record(record: dict) -> dict:
++    value = record["amount"] * 1.1                   # line 7: no None check — KeyError if "amount" missing
++    return {"processed": value}
++
++def convert_to_array(data: list) -> np.ndarray:
++    arr = np.array(data, dtype=np.int8)              # line 11: int8 overflows silently for values > 127
++    return arr
++
++def process_batch(records: list, batch_size: int = 100):
++    results_cache.append(records)                    # line 15: appends entire batch to module-level list
++    
++    for i in range(0, len(records), batch_size):
++        batch = records[i : i + batch_size + 1]     # line 18: off-by-one — includes extra record at boundary
++        yield batch
++
++def load_csv(filepath: str) -> list:
++    f = open(filepath, 'r')                          # line 22: file handle never closed
++    reader = csv.reader(f)
++    return list(reader)
++
++def run_pipeline(filepath: str):
++    try:
++        data = load_csv(filepath)
++        processed = [process_record(r) for r in data]
++        return processed
++    except:                                          # line 31: bare except swallows ALL errors silently
++        return []
+""",
+        "required_verdict": "request_changes",
+        "known_issues": [
+            {
+                "line_number": 4,
+                "issue_type": "bug",
+                "severity": "major",
+                "description": "Module-level results_cache list grows unboundedly — each call appends data, never cleared = memory leak",
+                "keywords": ["memory leak", "cache", "unbounded", "module-level", "accumulate"]
+            },
+            {
+                "line_number": 7,
+                "issue_type": "bug",
+                "severity": "major",
+                "description": "No None/missing key check before accessing record['amount'] — raises KeyError on incomplete records",
+                "keywords": ["None", "KeyError", "missing", "check", "amount"]
+            },
+            {
+                "line_number": 11,
+                "issue_type": "bug",
+                "severity": "critical",
+                "description": "dtype=int8 silently overflows for values > 127 — data corruption with no error raised",
+                "keywords": ["overflow", "int8", "dtype", "silent", "numpy"]
+            },
+            {
+                "line_number": 18,
+                "issue_type": "bug",
+                "severity": "minor",
+                "description": "Slice uses i+batch_size+1 instead of i+batch_size — off-by-one includes an extra record in each batch",
+                "keywords": ["off-by-one", "slice", "batch", "boundary", "index"]
+            },
+            {
+                "line_number": 22,
+                "issue_type": "bug",
+                "severity": "major",
+                "description": "File opened with open() but never closed — file handle leak, especially bad in loops",
+                "keywords": ["file", "close", "handle", "leak", "open", "context manager"]
+            },
+            {
+                "line_number": 31,
+                "issue_type": "bug",
+                "severity": "major",
+                "description": "Bare except: catches all exceptions including KeyboardInterrupt and SystemExit — errors silently swallowed",
+                "keywords": ["bare except", "swallow", "silent", "exception", "broad"]
+            }
+        ]
+    },
 }
 
 def get_task(task_id: str) -> Dict[str, Any]:

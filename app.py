@@ -16,7 +16,7 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from typing import Any, Dict, Optional
 import os
-
+import inference
 from models import (
     Action,
     Observation,
@@ -211,17 +211,12 @@ def grader(grader_input: GraderInput):
 # FIX 3: runs inference explicitly in-process to capture AI findings
 @app.post("/baseline", tags=["OpenEnv"])
 def baseline(request: Optional[BaselineRequest] = None):
-    import inference
-    from openai import OpenAI
 
     task_id = request.task_id if request and request.task_id else "easy"
 
-    client = OpenAI(
-        api_key=inference._api_key,
-        base_url=inference.API_BASE_URL,
-    )
+    providers = inference.get_providers(inference.MODEL_NAME)
 
-    # Run single task and capture action
+    # Hook into parse_llm_response to capture the action
     captured = {}
     original_parse = inference.parse_llm_response
 
@@ -233,7 +228,7 @@ def baseline(request: Optional[BaselineRequest] = None):
     inference.parse_llm_response = hooked_parse
 
     try:
-        res = inference.run_task(client, task_id, inference.MODEL_NAME, verbose=False)
+        res = inference.run_task(task_id, providers, verbose=False)
 
         action = captured.get('action')
         ai_findings = [c.model_dump() for c in action.comments] if action else []
@@ -241,7 +236,7 @@ def baseline(request: Optional[BaselineRequest] = None):
 
         return {
             "scores": [res],
-            "model_used": inference.MODEL_NAME,
+            "model_used": providers[0]['model'] if providers else inference.MODEL_NAME,
             "note": "Temperature=0.",
             "ai_findings": ai_findings,
             "verdict": verdict
