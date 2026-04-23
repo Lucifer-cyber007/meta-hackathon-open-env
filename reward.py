@@ -26,6 +26,48 @@ def _line_proximity(comment_line: int, known_line: int, tolerance: int = 4) -> b
     return abs(comment_line - known_line) <= tolerance
 
 
+def check_reward_hacking(comments, verdict, text):
+    """
+    Server-side reward hacking detection.
+    Returns penalty amount (0.0 = no hacking detected)
+    """
+    penalty = 0.0
+    hacking_detected = []
+    
+    # Check 1: Too many comments
+    if len(comments) > 12:
+        extra = len(comments) - 12
+        penalty += extra * 0.05
+        hacking_detected.append(f"spam:{len(comments)} comments")
+    
+    # Check 2: Duplicate descriptions
+    if comments:
+        descriptions = [c.get("description", "").lower().strip() 
+                       for c in comments]
+        unique = set(descriptions)
+        if len(unique) < len(descriptions) * 0.5:
+            penalty += 0.20
+            hacking_detected.append("duplicates")
+    
+    # Check 3: Very short descriptions
+    if comments:
+        short = sum(1 for c in comments 
+                   if len(c.get("description", "")) < 15)
+        if short > len(comments) * 0.5:
+            penalty += 0.10
+            hacking_detected.append(f"short_descriptions:{short}")
+    
+    # Check 4: No comments but request_changes
+    if len(comments) == 0 and verdict == "request_changes":
+        penalty += 0.10
+        hacking_detected.append("empty_request_changes")
+    
+    if hacking_detected:
+        print(f"  [ANTI-HACK] Detected: {', '.join(hacking_detected)}, penalty={penalty:.2f}")
+    
+    return penalty
+
+
 def match_comments_to_issues(
     comments: List[Dict[str, Any]],
     known_issues: List[Dict[str, Any]],
@@ -109,6 +151,12 @@ def calculate_reward(
     step_pen = step_number * STEP_PENALTY
     breakdown["step_penalty"] = round(step_pen, 4)
 
+    # --- Anti-reward hacking penalty ---
+    text_content = getattr(action, "text", "")
+    hacking_penalty = check_reward_hacking(comments_data, action.verdict, text_content)
+    if hacking_penalty > 0:
+        breakdown["hacking_penalty"] = -round(hacking_penalty, 4)
+
     total = sum(breakdown.values())
     total = round(max(-1.0, min(1.0, total)), 4)
 
@@ -125,6 +173,9 @@ def calculate_reward(
         message_parts.append(
             f"Wrong verdict '{action.verdict}' (expected '{required_verdict}') ({WRONG_VERDICT_PENALTY})"
         )
+
+    if hacking_penalty > 0:
+        message_parts.append(f"Anti-hack penalty (-{hacking_penalty:.2f})")
 
     return Reward(
         value=total,
