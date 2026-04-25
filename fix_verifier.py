@@ -52,7 +52,8 @@ def verify_single_fix(
     keywords     = issue.get("keywords", [])
     severity     = issue.get("severity", "minor")
     fixed_lower  = fixed_code.lower()
-    issue_desc   = fix.get("issue_description", "").lower()
+    issue_desc = (fix.get("issue_description", "") or fix.get("description", "")).lower()
+
 
     # Count how many keywords appear in EITHER
     # the fixed code OR the agent's description
