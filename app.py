@@ -29,7 +29,8 @@ from environment import CodeReviewEnv
 from graders import grade_episode
 from tasks import get_all_tasks
 from free_review import review_free_code
-
+from curriculum import curriculum_tracker
+from fix_verifier import verify_all_fixes
 # ── App setup ─────────────────────────────────────────────────────────────
 app = FastAPI(
     title="CodeReviewEnv",
@@ -62,6 +63,15 @@ class ResetRequest(BaseModel):
 
 class BaselineRequest(BaseModel):
     task_id: Optional[str] = None
+
+class CurriculumUpdateRequest(BaseModel):
+    task_id: str
+    score: float
+
+class FixRequest(BaseModel):
+    task_id: str
+    fixes: list
+    original_code: Optional[str] = ""
 
 
 class StepResponse(BaseModel):
@@ -347,6 +357,114 @@ def dashboard():
     with open(html_path, "r", encoding="utf-8") as f:
         return f.read()
 
+
+# ── Curriculum Endpoints ──────────────────────────────
+
+@app.post("/curriculum/update", tags=["Curriculum"])
+def curriculum_update(request: CurriculumUpdateRequest):
+    """
+    Record agent score for a task.
+    Returns recommended next task based on performance.
+    When agent averages above threshold for 3 episodes,
+    it gets promoted to the next harder task automatically.
+    """
+    result = curriculum_tracker.update(
+        task_id=request.task_id,
+        score=request.score,
+    )
+    return result
+
+
+@app.get("/curriculum/state", tags=["Curriculum"])
+def curriculum_state():
+    """
+    Show full curriculum progress across all tasks.
+    Shows mastered tasks, current level, promotions log.
+    """
+    return curriculum_tracker.get_state()
+
+
+@app.post("/curriculum/reset", tags=["Curriculum"])
+def curriculum_reset():
+    """Reset curriculum — start agent from scratch."""
+    curriculum_tracker.reset()
+    return {"message": "Curriculum reset. Agent starts from easy."}
+
+
+# ── Bug Fix Endpoints ─────────────────────────────────
+
+@app.post("/fix", tags=["Bug Fixing"])
+def submit_fix(request: FixRequest):
+    """
+    Agent submits fixes for bugs it found.
+    Verifier checks each fix against known issues.
+    Returns fix reward — bonus on top of review reward.
+
+    fixes format:
+    [
+        {
+            "line_number": 5,
+            "issue_description": "ZeroDivisionError...",
+            "fixed_code": "return total / len(numbers) if numbers else 0"
+        }
+    ]
+    """
+    from tasks import get_task
+
+    task = get_task(request.task_id)
+    if not task:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown task_id: {request.task_id}"
+        )
+
+    known_issues  = task["known_issues"]
+    original_code = request.original_code or task["diff"]
+
+    result = verify_all_fixes(
+        original_code=original_code,
+        agent_fixes=request.fixes,
+        known_issues=known_issues,
+    )
+
+    return {
+        "task_id":         request.task_id,
+        "fix_reward":      result["total_fix_reward"],
+        "fixes_correct":   result["fixes_correct"],
+        "fixes_partial":   result["fixes_partial"],
+        "fixes_wrong":     result["fixes_wrong"],
+        "fixes_missing":   result["fixes_missing"],
+        "breakdown":       result["breakdown"],
+        "message":         result["message"],
+    }
+
+
+@app.get("/fix/schema", tags=["Bug Fixing"])
+def fix_schema():
+    """Return the schema for submitting fixes."""
+    return {
+        "endpoint": "POST /fix",
+        "description": "Submit bug fixes after reviewing code",
+        "request_format": {
+            "task_id": "string — same task_id used in /reset",
+            "fixes": [
+                {
+                    "line_number": "integer — line where bug was found",
+                    "issue_description": "string — what the bug is",
+                    "fixed_code": "string — your corrected version of that line",
+                }
+            ],
+            "original_code": "string — optional, original code for comparison",
+        },
+        "reward_values": {
+            "correct_fix_critical": "+0.40",
+            "correct_fix_major":    "+0.35",
+            "correct_fix_minor":    "+0.30",
+            "partial_fix":          "+0.10",
+            "wrong_fix":            "-0.10",
+            "missing_critical_fix": "-0.05 per issue",
+        },
+    }
 
 # ── Entry point ───────────────────────────────────────────────────────────
 
