@@ -73,6 +73,7 @@ Code review costs the software industry **$50 billion annually**. Every producti
 ### Learning Curve — GRPO Training on A100
 
 ![Learning Curve](learning_curve.png)
+
 *Reward increases from ~0.60 to ~1.15 over 250 training steps.
 Red line = smoothed reward (window=25). Yellow dashed = Groq-70B baseline (0.58).*
 
