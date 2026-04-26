@@ -79,6 +79,7 @@ Red line = smoothed reward (window=25). Yellow dashed = Groq-70B baseline (0.58)
 ### Before vs After Comparison
 
 ![Before After](before_after.png)
+
 *Qwen2.5-Coder-7B after GRPO training vs Groq llama-3.3-70B baseline across 5 tasks.*
 
 ---
