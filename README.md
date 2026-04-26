@@ -35,7 +35,7 @@ tags:
 |----------|------|
 | 🌐 **Live Demo** | https://lucifer0077-code-review-env.hf.space |
 | 🤖 **Trained Model** | https://huggingface.co/lucifer0077/code-review-agent-grpo |
-| 📓 **Training Notebook** | https://huggingface.co/lucifer0077/code-review-agent-grpo/blob/main/training_notebook.ipynb |
+| 📓 **Training Notebook** | https://huggingface.co/spaces/lucifer0077/code-review-training |
 | 📝 **Blog Post** | https://huggingface.co/spaces/lucifer0077/code-review-env/blob/main/BLOG.md |
 | 💻 **GitHub** | https://github.com/Lucifer-cyber007/meta-hackathon-open-env |
 
